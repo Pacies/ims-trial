@@ -1,12 +1,9 @@
 "use client"
-
-import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, LogOut } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { LogOut } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -16,7 +13,6 @@ import { useToast } from "@/hooks/use-toast"
 import { addActivity } from "@/lib/activity-store"
 
 export default function Navbar() {
-  const [searchTerm, setSearchTerm] = useState("")
   const [currentTime, setCurrentTime] = useState("")
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const pathname = usePathname()
@@ -45,15 +41,6 @@ export default function Navbar() {
 
     return () => clearInterval(interval)
   }, [])
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchTerm.trim()) {
-      addActivity(`Searched for "${searchTerm}"`)
-      alert(`Searching for "${searchTerm}"...`)
-      setSearchTerm("")
-    }
-  }
 
   const handleLogout = () => {
     // Clear session storage
@@ -126,17 +113,6 @@ export default function Navbar() {
           </ul>
 
           <div className="flex items-center gap-4 w-full md:w-auto">
-            <form onSubmit={handleSearch} className="relative w-full md:w-auto">
-              <Input
-                type="search"
-                placeholder="Search..."
-                className="w-full md:w-64 pl-9 bg-white border-gray-300 focus-visible:ring-blue-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-            </form>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="border-2 border-blue-500 cursor-pointer">

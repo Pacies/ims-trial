@@ -4,15 +4,13 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Package, ShoppingCart, TrendingUp, AlertTriangle, Wrench } from "lucide-react"
+import { Package, TrendingUp, AlertTriangle, Wrench } from "lucide-react"
 import {
   getInventoryItems,
   getRawMaterials,
-  getOrders,
   getActivities,
   type InventoryItem,
   type RawMaterial,
-  type Order,
   type Activity,
 } from "@/lib/database"
 import StatCard from "@/components/stat-card"
@@ -23,23 +21,20 @@ import MainLayout from "@/components/main-layout"
 export default function Dashboard() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [itemsData, materialsData, ordersData, activitiesData] = await Promise.all([
+        const [itemsData, materialsData, activitiesData] = await Promise.all([
           getInventoryItems(),
           getRawMaterials(),
-          getOrders(),
           getActivities(),
         ])
 
         setInventoryItems(itemsData)
         setRawMaterials(materialsData)
-        setOrders(ordersData)
         setActivities(activitiesData)
       } catch (error) {
         console.error("Error loading dashboard data:", error)
@@ -56,9 +51,11 @@ export default function Dashboard() {
   const totalRawMaterials = rawMaterials.length
   const lowStockProducts = inventoryItems.filter((item) => item.status === "low-stock").length
   const lowStockRawMaterials = rawMaterials.filter((material) => material.status === "low-stock").length
-  const totalOrders = orders.length
-  const pendingOrders = orders.filter((order) => order.status === "pending").length
   const totalValue = inventoryItems.reduce((sum, item) => sum + item.price * item.stock, 0)
+  const totalRawMaterialsValue = rawMaterials.reduce(
+    (sum, material) => sum + material.cost_per_unit * material.quantity,
+    0,
+  )
 
   if (isLoading) {
     return (
@@ -106,14 +103,14 @@ export default function Dashboard() {
             variant={totalRawMaterials > 0 ? "success" : "default"}
           />
           <StatCard
-            value={totalOrders.toString()}
-            label="Total Orders"
-            icon={<ShoppingCart className="w-6 h-6" />}
-            variant={pendingOrders > 0 ? "warning" : "default"}
+            value={`₱${totalValue.toLocaleString()}`}
+            label="Products Value"
+            icon={<TrendingUp className="w-6 h-6" />}
+            variant="success"
           />
           <StatCard
-            value={`$${totalValue.toLocaleString()}`}
-            label="Inventory Value"
+            value={`₱${totalRawMaterialsValue.toLocaleString()}`}
+            label="Materials Value"
             icon={<TrendingUp className="w-6 h-6" />}
             variant="success"
           />
@@ -143,7 +140,7 @@ export default function Dashboard() {
           <Tabs defaultValue="activity" className="space-y-4">
             <TabsList>
               <TabsTrigger value="activity">Recent Activity</TabsTrigger>
-              <TabsTrigger value="orders">Recent Orders</TabsTrigger>
+              <TabsTrigger value="inventory">Inventory Overview</TabsTrigger>
             </TabsList>
 
             <TabsContent value="activity" className="space-y-4">
@@ -158,43 +155,79 @@ export default function Dashboard() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="orders" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Orders</CardTitle>
-                  <CardDescription>Latest customer orders</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {orders.slice(0, 5).map((order) => (
-                      <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{order.order_number}</p>
-                          <p className="text-sm text-muted-foreground">{order.customer_name}</p>
+            <TabsContent value="inventory" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Top Products</CardTitle>
+                    <CardDescription>Products with highest stock quantity</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {inventoryItems
+                        .sort((a, b) => b.stock - a.stock)
+                        .slice(0, 5)
+                        .map((item) => (
+                          <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+                            <div>
+                              <p className="font-medium">{item.name}</p>
+                              <p className="text-sm text-muted-foreground">{item.sku}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium">{item.stock} units</p>
+                              <Badge
+                                variant={
+                                  item.status === "in-stock"
+                                    ? "default"
+                                    : item.status === "low-stock"
+                                      ? "secondary"
+                                      : "destructive"
+                                }
+                              >
+                                {item.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Raw Materials Status</CardTitle>
+                    <CardDescription>Current raw materials inventory</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {rawMaterials.slice(0, 5).map((material) => (
+                        <div key={material.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{material.name}</p>
+                            <p className="text-sm text-muted-foreground">{material.sku}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">
+                              {material.quantity} {material.unit}
+                            </p>
+                            <Badge
+                              variant={
+                                material.status === "in-stock"
+                                  ? "default"
+                                  : material.status === "low-stock"
+                                    ? "secondary"
+                                    : "destructive"
+                              }
+                            >
+                              {material.status}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium">${order.total}</p>
-                          <Badge
-                            variant={
-                              order.status === "delivered"
-                                ? "default"
-                                : order.status === "shipped"
-                                  ? "secondary"
-                                  : order.status === "processing"
-                                    ? "outline"
-                                    : order.status === "cancelled"
-                                      ? "destructive"
-                                      : "secondary"
-                            }
-                          >
-                            {order.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>

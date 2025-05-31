@@ -10,6 +10,21 @@ function checkAuth() {
 }
 
 function logout() {
+  // Log the logout activity if possible
+  const currentUser = getCurrentUser()
+  if (currentUser && currentUser.id) {
+    // This is a simplified version - in a real app you'd call an API endpoint
+    fetch("/api/log-activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: currentUser.id,
+        action: "logout",
+        description: `User ${currentUser.username} logged out`,
+      }),
+    }).catch((err) => console.error("Failed to log logout activity:", err))
+  }
+
   sessionStorage.removeItem("currentUser")
   window.location.href = "login.html"
 }
@@ -50,6 +65,11 @@ function setupNavigation() {
             <a href="dashboard.html" ${window.location.pathname.includes("dashboard") ? 'class="active"' : ""}>Dashboard</a>
             <a href="raw-materials.html" ${window.location.pathname.includes("raw-materials") ? 'class="active"' : ""}>Raw Materials</a>
             <a href="products.html" ${window.location.pathname.includes("products") ? 'class="active"' : ""}>Products</a>
+        `
+  } else if (currentUser.type === "viewer") {
+    navHTML = `
+            <a href="dashboard.html" ${window.location.pathname.includes("dashboard") ? 'class="active"' : ""}>Dashboard</a>
+            <a href="reports.html" ${window.location.pathname.includes("reports") ? 'class="active"' : ""}>Reports</a>
         `
   }
 

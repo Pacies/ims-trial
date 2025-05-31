@@ -24,7 +24,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { getUsers, addUser, updateUser, deleteUser, isAdmin, type User } from "@/lib/database" // Import User type
+import {
+  getUsers,
+  addUser,
+  updateUser,
+  deleteUser,
+  isAdmin,
+  type User,
+  addUserPassword,
+  updateUserPassword,
+} from "@/lib/database" // Import User type
 
 export default function ManageUsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -105,31 +114,44 @@ export default function ManageUsersPage() {
           user_type: formData.user_type,
           status: formData.status,
         }
-        // Password update should be handled separately for security reasons
-        // if (formData.password) { /* Add password update logic if needed */ }
+
         result = await updateUser(selectedUser.id, updateData)
+
+        // Update password if provided
+        if (formData.password && formData.password.trim() !== "") {
+          const passwordResult = await updateUserPassword(selectedUser.id, formData.password)
+          if (!passwordResult) {
+            toast({ title: "Warning", description: "User updated but password change failed.", variant: "destructive" })
+          }
+        }
+
         if (result) {
-          setUsers(users.map((u) => (u.id === selectedUser.id ? result! : u)))
-          toast({ title: "Success", description: "User updated successfully!" })
+          // Reload users data to ensure consistency
+          await loadUsers()
+          toast({ title: "Success", description: "User updated successfully and data refreshed!" })
         }
       } else {
-        // This is a simplified add user for the custom 'users' table.
-        // A full implementation would involve Supabase Auth for password handling.
-        // For now, we're adding to 'users' directly. Password is not hashed.
+        // Add new user
         const newUserPayload = {
           username: formData.username,
           email: formData.email,
           user_type: formData.user_type,
           status: formData.status,
-          // password_hash: formData.password // In real app, hash password
         }
+
         result = await addUser(newUserPayload as Omit<User, "id" | "created_at" | "updated_at" | "last_login">)
+
         if (result) {
-          setUsers([result!, ...users])
-          toast({
-            title: "Success",
-            description: "User added successfully! (Note: Password not securely stored in this demo)",
-          })
+          // Add password for the new user
+          const passwordResult = await addUserPassword(result.id, formData.password)
+
+          if (!passwordResult) {
+            toast({ title: "Warning", description: "User created but password setup failed.", variant: "destructive" })
+          } else {
+            // Reload users data to ensure consistency
+            await loadUsers()
+            toast({ title: "Success", description: "User added successfully and data refreshed!" })
+          }
         }
       }
 
@@ -151,8 +173,9 @@ export default function ManageUsersPage() {
       setIsLoading(true)
       const success = await deleteUser(userToDelete.id)
       if (success) {
-        setUsers(users.filter((u) => u.id !== userToDelete.id))
-        toast({ title: "Success", description: "User deleted successfully!" })
+        // Reload users data to ensure consistency
+        await loadUsers()
+        toast({ title: "Success", description: "User deleted successfully and data refreshed!" })
       } else {
         toast({ title: "Error", description: "Failed to delete user.", variant: "destructive" })
       }
@@ -386,7 +409,16 @@ export default function ManageUsersPage() {
                   placeholder="Enter email"
                 />
               </div>
-              {/* Password change should be a separate, more secure flow usually */}
+              <div>
+                <Label htmlFor="edit-password">Password (leave blank to keep current)</Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Enter new password"
+                />
+              </div>
               <div>
                 <Label htmlFor="edit-type">User Type</Label>
                 <Select

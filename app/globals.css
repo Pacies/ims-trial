@@ -114,3 +114,96 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(59, 130, 246, 0.8);
 }
+
+/* CRITICAL FIX: Force proper calendar alignment using CSS Grid */
+.rdp-table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.rdp-head_row {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  gap: 4px !important;
+  margin-bottom: 8px !important;
+}
+
+.rdp-row {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  gap: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+.rdp-head_cell {
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.8rem !important;
+  font-weight: normal !important;
+  color: rgb(107 114 128) !important;
+  text-align: center !important;
+}
+
+.rdp-cell {
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+
+.rdp-day {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.rdp-day:hover {
+  background-color: rgb(243 244 246) !important;
+}
+
+.rdp-day_selected {
+  background-color: rgb(59 130 246) !important;
+  color: white !important;
+}
+
+.rdp-day_today {
+  background-color: rgb(243 244 246) !important;
+  font-weight: 500 !important;
+}
+
+.rdp-day_outside {
+  color: rgb(156 163 175) !important;
+  opacity: 0.5 !important;
+}
+
+.rdp-day_disabled {
+  color: rgb(156 163 175) !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Range selection styles */
+.rdp-day_range_start,
+.rdp-day_range_end {
+  background-color: rgb(59 130 246) !important;
+  color: white !important;
+}
+
+.rdp-day_range_middle {
+  background-color: rgb(219 234 254) !important;
+  color: rgb(59 130 246) !important;
+}

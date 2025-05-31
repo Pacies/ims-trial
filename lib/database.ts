@@ -1,21 +1,21 @@
-import { supabase } from "./supabaseClient"
+import { supabase, testSupabaseConnection } from "./supabaseClient"
 
 // Types for our database tables
-export interface User {
-  id: number
+export type User = {
+  id: string
   username: string
   email: string
-  user_type: "admin" | "staff" | "viewer"
+  user_type: "admin" | "staff"
   status: "active" | "inactive"
+  created_at?: string
+  updated_at?: string
   last_login?: string
-  created_at: string
-  updated_at: string
 }
 
 export interface AuthUserMapping {
-  id: string // This is usually a UUID from Supabase Auth
-  auth_user_id: string // UUID from auth.users
-  app_user_id: number // Foreign key to your custom users table
+  id: string
+  auth_user_id: string
+  app_user_id: string
   created_at: string
 }
 
@@ -23,7 +23,7 @@ export interface InventoryItem {
   id: number
   name: string
   description?: string
-  category: string // "top" | "bottom"
+  category: string
   price: number
   stock: number
   sku: string
@@ -49,68 +49,305 @@ export interface RawMaterial {
   updated_at: string
 }
 
-export interface Order {
+export interface FixedPrice {
   id: number
-  order_number: string
-  customer_name: string
-  customer_email?: string
-  items: string
-  total: number
-  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled"
+  item_type: "raw_material" | "product"
+  category: string
+  item_name: string
+  price: number
+  is_active: boolean
   created_at: string
   updated_at: string
 }
 
 export interface Activity {
   id: number
-  user_id?: number
+  user_id?: string
   action: string
   description: string
   created_at: string
 }
 
-// Helper function to get current user from auth mapping
+// Helper function to get current user
 export async function getCurrentUser(): Promise<User | null> {
-  // For development/demo purposes, return a mock admin user
-  console.warn("getCurrentUser: Returning mock admin user for development.")
-  return {
-    id: 1,
-    username: "admin_mock",
-    email: "admin_mock@example.com",
-    user_type: "admin",
-    status: "active",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+  try {
+    if (typeof window !== "undefined") {
+      const sessionUser = sessionStorage.getItem("currentUser")
+      if (sessionUser) {
+        const userData = JSON.parse(sessionUser)
+        return {
+          id: userData.id,
+          username: userData.username,
+          email: userData.email || "",
+          user_type: userData.type,
+          status: "active",
+        } as User
+      }
+
+      const localUser = localStorage.getItem("user")
+      if (localUser) {
+        return JSON.parse(localUser) as User
+      }
+    }
+  } catch (error) {
+    console.error("Error parsing user session:", error)
   }
+  return null
 }
 
 // Helper function to check if user has admin privileges
 export async function isAdmin(): Promise<boolean> {
   const user = await getCurrentUser()
-  return user?.user_type === "admin" && user?.status === "active"
+  return user?.user_type === "admin"
 }
 
 // Helper function to check if user has staff or admin privileges
 export async function isStaffOrAdmin(): Promise<boolean> {
   const user = await getCurrentUser()
-  return user?.user_type && ["admin", "staff"].includes(user.user_type) && user?.status === "active"
+  return user?.user_type && ["admin", "staff"].includes(user.user_type)
 }
 
-// Database operations for inventory items (products)
-export async function getInventoryItems(): Promise<InventoryItem[]> {
+// Test function to check database connection and data
+export async function testDatabaseConnection(): Promise<void> {
   try {
-    console.log("Fetching inventory items from database...")
-    const { data, error } = await supabase.from("inventory_items").select("*").order("created_at", { ascending: false })
+    console.log("=== Database Connection Test ===")
+
+    // First test the Supabase connection
+    const connectionOk = await testSupabaseConnection()
+    if (!connectionOk) {
+      console.error("Supabase connection failed - check your credentials")
+      return
+    }
+
+    // Test users table
+    console.log("Testing users table...")
+    const { data: users, error: usersError } = await supabase.from("users").select("*")
+
+    if (usersError) {
+      console.error("Error fetching users:", {
+        message: usersError.message,
+        details: usersError.details,
+        hint: usersError.hint,
+        code: usersError.code,
+      })
+    } else {
+      console.log("Users found:", users?.length || 0)
+      console.log("Users data:", users)
+    }
+
+    // Test user_passwords table
+    console.log("Testing user_passwords table...")
+    const { data: passwords, error: passwordsError } = await supabase
+      .from("user_passwords")
+      .select("user_id, password_hash")
+
+    if (passwordsError) {
+      console.error("Error fetching passwords:", {
+        message: passwordsError.message,
+        details: passwordsError.details,
+        hint: passwordsError.hint,
+        code: passwordsError.code,
+      })
+    } else {
+      console.log("Passwords found:", passwords?.length || 0)
+      console.log("Password data:", passwords)
+    }
+
+    console.log("=== End Database Test ===")
+  } catch (error) {
+    console.error("Database test error:", error)
+  }
+}
+
+// Authenticate user with better error handling
+export async function authenticateUser(username: string, password: string): Promise<User | null> {
+  try {
+    console.log("=== Authentication Attempt ===")
+    console.log("Username:", username)
+
+    // Test connection first
+    const connectionOk = await testSupabaseConnection()
+    if (!connectionOk) {
+      console.error("Cannot authenticate - Supabase connection failed")
+      return null
+    }
+
+    // Get user by username with detailed error handling
+    console.log("Looking up user...")
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("username", username)
+      .eq("status", "active")
+      .single()
+
+    if (userError) {
+      console.error("User lookup failed:", {
+        message: userError.message,
+        details: userError.details,
+        hint: userError.hint,
+        code: userError.code,
+      })
+      return null
+    }
+
+    if (!user) {
+      console.error("No user found with username:", username)
+      return null
+    }
+
+    console.log("User found:", {
+      id: user.id,
+      username: user.username,
+      user_type: user.user_type,
+      status: user.status,
+    })
+
+    // Get password for user
+    console.log("Looking up password...")
+    const { data: passwordData, error: passwordError } = await supabase
+      .from("user_passwords")
+      .select("password_hash")
+      .eq("user_id", user.id)
+      .single()
+
+    if (passwordError) {
+      console.error("Password lookup failed:", {
+        message: passwordError.message,
+        details: passwordError.details,
+        hint: passwordError.hint,
+        code: passwordError.code,
+      })
+      return null
+    }
+
+    if (!passwordData) {
+      console.error("No password found for user:", user.id)
+      return null
+    }
+
+    console.log("Password found for user")
+
+    // Check password
+    if (passwordData.password_hash !== password) {
+      console.error("Password mismatch")
+      return null
+    }
+
+    console.log("Password matches - authentication successful")
+
+    // Update last login
+    try {
+      await supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id)
+    } catch (updateError) {
+      console.warn("Failed to update last login:", updateError)
+    }
+
+    // Log activity
+    try {
+      await logActivity("login", `User ${user.username} logged in`)
+    } catch (activityError) {
+      console.warn("Failed to log activity:", activityError)
+    }
+
+    console.log("=== Authentication Complete ===")
+    return user as User
+  } catch (error) {
+    console.error("Authentication error:", error)
+    return null
+  }
+}
+
+// Database operations for fixed prices
+export async function getFixedPrices(itemType: "raw_material" | "product", category?: string): Promise<FixedPrice[]> {
+  try {
+    let query = supabase.from("fixed_prices").select("*").eq("item_type", itemType).eq("is_active", true)
+
+    if (category) {
+      query = query.eq("category", category)
+    }
+
+    const { data, error } = await query.order("item_name", { ascending: true })
 
     if (error) {
-      console.error("Error fetching inventory items:", error.message)
+      console.error("Error fetching fixed prices:", error)
       return []
     }
 
-    console.log("Successfully fetched inventory items:", data)
     return data || []
   } catch (error: any) {
-    console.error("Unexpected error fetching inventory items:", error.message)
+    console.error("Unexpected error fetching fixed prices:", error)
+    return []
+  }
+}
+
+export async function addFixedPrice(
+  priceData: Omit<FixedPrice, "id" | "created_at" | "updated_at">,
+): Promise<FixedPrice | null> {
+  try {
+    const { data, error } = await supabase.from("fixed_prices").insert(priceData).select().single()
+
+    if (error) {
+      console.error("Error adding fixed price:", error)
+      return null
+    }
+
+    await logActivity("create", `Added fixed price for ${priceData.item_name}: $${priceData.price}`)
+    return data
+  } catch (error: any) {
+    console.error("Unexpected error adding fixed price:", error)
+    return null
+  }
+}
+
+export async function updateFixedPrice(id: number, updates: Partial<FixedPrice>): Promise<FixedPrice | null> {
+  try {
+    const { data, error } = await supabase.from("fixed_prices").update(updates).eq("id", id).select().single()
+
+    if (error) {
+      console.error("Error updating fixed price:", error)
+      return null
+    }
+
+    await logActivity("update", `Updated fixed price for ${data.item_name}: $${data.price}`)
+    return data
+  } catch (error: any) {
+    console.error("Unexpected error updating fixed price:", error)
+    return null
+  }
+}
+
+export async function deleteFixedPrice(id: number): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("fixed_prices").delete().eq("id", id)
+
+    if (error) {
+      console.error("Error deleting fixed price:", error)
+      return false
+    }
+
+    await logActivity("delete", `Deleted fixed price with ID: ${id}`)
+    return true
+  } catch (error: any) {
+    console.error("Unexpected error deleting fixed price:", error)
+    return false
+  }
+}
+
+// Database operations for inventory items
+export async function getInventoryItems(): Promise<InventoryItem[]> {
+  try {
+    console.log("Fetching inventory items...")
+    const { data, error } = await supabase.from("inventory_items").select("*").order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching inventory items:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error: any) {
+    console.error("Unexpected error fetching inventory items:", error)
     return []
   }
 }
@@ -145,13 +382,13 @@ export async function addInventoryItem(
     const { data, error } = await supabase.from("inventory_items").insert(newItem).select().single()
 
     if (error) {
-      console.error("Error adding inventory item:", error.message)
+      console.error("Error adding inventory item:", error)
       return null
     }
     await logActivity("create", `Added new product: ${data.name} (SKU: ${data.sku})`)
     return data
   } catch (error: any) {
-    console.error("Unexpected error adding inventory item:", error.message)
+    console.error("Unexpected error adding inventory item:", error)
     return null
   }
 }
@@ -163,15 +400,23 @@ export async function updateInventoryItem(id: number, updates: Partial<Inventory
       else if (updates.stock <= 10) updates.status = "low-stock"
       else updates.status = "in-stock"
     }
-    const { data, error } = await supabase.from("inventory_items").update(updates).eq("id", id).select().single()
+
+    const updateData = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase.from("inventory_items").update(updateData).eq("id", id).select().single()
+
     if (error) {
-      console.error("Error updating inventory item:", error.message)
+      console.error("Error updating inventory item:", error)
       return null
     }
+
     await logActivity("update", `Updated product: ${data.name} (ID: ${id})`)
     return data
   } catch (error: any) {
-    console.error("Unexpected error updating inventory item:", error.message)
+    console.error("Unexpected error updating inventory item:", error)
     return null
   }
 }
@@ -180,13 +425,13 @@ export async function deleteInventoryItem(id: number): Promise<boolean> {
   try {
     const { error } = await supabase.from("inventory_items").delete().eq("id", id)
     if (error) {
-      console.error("Error deleting inventory item:", error.message)
+      console.error("Error deleting inventory item:", error)
       return false
     }
     await logActivity("delete", `Deleted product with ID: ${id}`)
     return true
   } catch (error: any) {
-    console.error("Unexpected error deleting inventory item:", error.message)
+    console.error("Unexpected error deleting inventory item:", error)
     return false
   }
 }
@@ -194,17 +439,13 @@ export async function deleteInventoryItem(id: number): Promise<boolean> {
 // Database operations for raw materials
 export async function getRawMaterials(): Promise<RawMaterial[]> {
   try {
-    console.log("Fetching raw materials from database...")
     const { data, error } = await supabase.from("raw_materials").select("*").order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Error fetching raw materials:", error.message)
+      console.error("Error fetching raw materials:", error)
       return []
     }
 
-    console.log("Successfully fetched raw materials:", data)
-
-    // Transform the data to match our interface
     const transformedData =
       data?.map((item: any) => ({
         id: item.id,
@@ -212,7 +453,7 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
         description: item.description,
         category: item.category || "general",
         quantity: item.quantity || 0,
-        unit: item.unit || "units",
+        unit: item.unit || (item.category === "Fabric" ? "rolls" : "units"),
         cost_per_unit: item.cost_per_unit || 0,
         supplier: item.supplier,
         reorder_level: item.reorder_level || 10,
@@ -224,7 +465,7 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
 
     return transformedData
   } catch (error: any) {
-    console.error("Unexpected error fetching raw materials:", error.message)
+    console.error("Unexpected error fetching raw materials:", error)
     return []
   }
 }
@@ -232,17 +473,8 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
 export async function addRawMaterial(
   material: Omit<
     RawMaterial,
-    | "id"
-    | "created_at"
-    | "updated_at"
-    | "sku"
-    | "status"
-    | "description"
-    | "supplier"
-    | "unit"
-    | "cost_per_unit"
-    | "reorder_level"
-  > & { quantity: number; category: string; name: string },
+    "id" | "created_at" | "updated_at" | "sku" | "status" | "description" | "supplier" | "unit" | "reorder_level"
+  > & { quantity: number; category: string; name: string; cost_per_unit: number },
 ): Promise<RawMaterial | null> {
   try {
     const { data: existingMaterials } = await supabase
@@ -262,32 +494,33 @@ export async function addRawMaterial(
     }
     const sku = `RAW-${nextNumber.toString().padStart(4, "0")}`
 
-    const unit = "units"
-    const cost_per_unit = 0
+    // Set unit based on category - fabric uses "rolls", others use "units"
+    const unit = material.category === "Fabric" ? "rolls" : "units"
     const reorder_level = 10
 
     let status: "in-stock" | "low-stock" | "out-of-stock" = "in-stock"
     if (material.quantity === 0) status = "out-of-stock"
     else if (material.quantity <= reorder_level) status = "low-stock"
 
-    const newMaterial = { ...material, sku, status, unit, cost_per_unit, reorder_level }
+    const newMaterial = { ...material, sku, status, unit, reorder_level }
 
     const { data, error } = await supabase.from("raw_materials").insert(newMaterial).select().single()
 
     if (error) {
-      console.error("Error adding raw material:", error.message)
+      console.error("Error adding raw material:", error)
       return null
     }
     await logActivity("create", `Added new raw material: ${data.name} (SKU: ${data.sku})`)
     return data
   } catch (error: any) {
-    console.error("Unexpected error adding raw material:", error.message)
+    console.error("Unexpected error adding raw material:", error)
     return null
   }
 }
 
 export async function updateRawMaterial(id: number, updates: Partial<RawMaterial>): Promise<RawMaterial | null> {
   try {
+    // Calculate status based on quantity and reorder level
     if (updates.quantity !== undefined || updates.reorder_level !== undefined) {
       const { data: currentMaterial } = await supabase
         .from("raw_materials")
@@ -302,15 +535,24 @@ export async function updateRawMaterial(id: number, updates: Partial<RawMaterial
         else updates.status = "in-stock"
       }
     }
-    const { data, error } = await supabase.from("raw_materials").update(updates).eq("id", id).select().single()
+
+    // Add updated_at timestamp
+    const updateData = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase.from("raw_materials").update(updateData).eq("id", id).select().single()
+
     if (error) {
-      console.error("Error updating raw material:", error.message)
+      console.error("Error updating raw material:", error)
       return null
     }
+
     await logActivity("update", `Updated raw material: ${data.name} (ID: ${id})`)
     return data
   } catch (error: any) {
-    console.error("Unexpected error updating raw material:", error.message)
+    console.error("Unexpected error updating raw material:", error)
     return null
   }
 }
@@ -319,122 +561,95 @@ export async function deleteRawMaterial(id: number): Promise<boolean> {
   try {
     const { error } = await supabase.from("raw_materials").delete().eq("id", id)
     if (error) {
-      console.error("Error deleting raw material:", error.message)
+      console.error("Error deleting raw material:", error)
       return false
     }
     await logActivity("delete", `Deleted raw material with ID: ${id}`)
     return true
   } catch (error: any) {
-    console.error("Unexpected error deleting raw material:", error.message)
+    console.error("Unexpected error deleting raw material:", error)
     return false
-  }
-}
-
-// Database operations for orders (keeping for completeness, but not primary focus)
-export async function getOrders(): Promise<Order[]> {
-  try {
-    const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false })
-    if (error) {
-      console.error("Error fetching orders:", error.message)
-      return []
-    }
-    return data || []
-  } catch (error: any) {
-    console.error("Unexpected error fetching orders:", error.message)
-    return []
   }
 }
 
 // Database operations for users
 export async function getUsers(): Promise<User[]> {
-  try {
-    console.log("Fetching users from database...")
-    const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
-    if (error) {
-      console.error("Error fetching users:", error.message)
-      // Return some mock users for development
-      return [
-        {
-          id: 1,
-          username: "admin",
-          email: "admin@example.com",
-          user_type: "admin",
-          status: "active",
-          last_login: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          username: "staff1",
-          email: "staff1@example.com",
-          user_type: "staff",
-          status: "active",
-          last_login: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ]
-    }
-    console.log("Successfully fetched users:", data)
-    return data || []
-  } catch (error: any) {
-    console.error("Unexpected error fetching users:", error.message)
+  const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
+  if (error) {
+    console.error("Error fetching users:", error)
     return []
   }
+  return data as User[]
 }
 
 export async function addUser(
-  user: Omit<User, "id" | "created_at" | "updated_at" | "last_login">,
+  userData: Omit<User, "id" | "created_at" | "updated_at" | "last_login">,
 ): Promise<User | null> {
-  try {
-    const { data, error } = await supabase.from("users").insert(user).select().single()
-    if (error) {
-      console.error("Error adding user:", error.message)
-      return null
-    }
-    await logActivity("create", `Added new user: ${data.username}`)
-    return data
-  } catch (error: any) {
-    console.error("Unexpected error adding user:", error.message)
+  const { data, error } = await supabase.from("users").insert([userData]).select()
+  if (error) {
+    console.error("Error adding user:", error)
     return null
   }
+  return data[0] as User
 }
 
-export async function updateUser(id: number, updates: Partial<User>): Promise<User | null> {
-  try {
-    const { data, error } = await supabase.from("users").update(updates).eq("id", id).select().single()
-    if (error) {
-      console.error("Error updating user:", error.message)
-      return null
-    }
-    await logActivity("update", `Updated user: ${data.username} (ID: ${id})`)
-    return data
-  } catch (error: any) {
-    console.error("Unexpected error updating user:", error.message)
-    return null
-  }
-}
+export async function addUserPassword(userId: string, password: string): Promise<boolean> {
+  const { data, error } = await supabase.from("user_passwords").insert([
+    {
+      user_id: userId,
+      password_hash: password,
+    },
+  ])
 
-export async function deleteUser(id: number): Promise<boolean> {
-  try {
-    const { error: mappingError } = await supabase.from("auth_user_mapping").delete().eq("app_user_id", id)
-    if (mappingError) {
-      console.warn("Error deleting from auth_user_mapping (might be okay if no mapping exists):", mappingError.message)
-    }
-
-    const { error: userError } = await supabase.from("users").delete().eq("id", id)
-    if (userError) {
-      console.error("Error deleting user from users table:", userError.message)
-      return false
-    }
-
-    await logActivity("delete", `Deleted user with ID: ${id}`)
-    return true
-  } catch (error: any) {
-    console.error("Unexpected error deleting user:", error.message)
+  if (error) {
+    console.error("Error adding user password:", error)
     return false
   }
+  return true
+}
+
+export async function updateUserPassword(userId: string, password: string): Promise<boolean> {
+  const { data: existingPassword } = await supabase.from("user_passwords").select("*").eq("user_id", userId).single()
+
+  if (existingPassword) {
+    const { error } = await supabase
+      .from("user_passwords")
+      .update({ password_hash: password, updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+
+    if (error) {
+      console.error("Error updating password:", error)
+      return false
+    }
+  } else {
+    return await addUserPassword(userId, password)
+  }
+
+  return true
+}
+
+export async function updateUser(id: string, userData: Partial<User>): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .update({ ...userData, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+
+  if (error) {
+    console.error("Error updating user:", error)
+    return null
+  }
+  return data[0] as User
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  await supabase.from("user_passwords").delete().eq("user_id", id)
+  const { error } = await supabase.from("users").delete().eq("id", id)
+  if (error) {
+    console.error("Error deleting user:", error)
+    return false
+  }
+  return true
 }
 
 // Database operations for activities
@@ -446,12 +661,12 @@ export async function getActivities(): Promise<Activity[]> {
       .order("created_at", { ascending: false })
       .limit(50)
     if (error) {
-      console.error("Error fetching activities:", error.message)
+      console.error("Error fetching activities:", error)
       return []
     }
     return data || []
   } catch (error: any) {
-    console.error("Unexpected error fetching activities:", error.message)
+    console.error("Unexpected error fetching activities:", error)
     return []
   }
 }
@@ -461,18 +676,17 @@ export async function logActivity(action: string, description: string): Promise<
     const user = await getCurrentUser()
     await supabase.from("activities").insert([{ user_id: user?.id || null, action, description }])
   } catch (error: any) {
-    console.error("Error logging activity:", error.message)
+    console.error("Error logging activity:", error)
   }
 }
 
-// Authentication functions
 export async function signOut(): Promise<void> {
   try {
     const { error } = await supabase.auth.signOut()
     if (error) {
-      console.error("Error signing out:", error.message)
+      console.error("Error signing out:", error)
     }
   } catch (error: any) {
-    console.error("Unexpected error signing out:", error.message)
+    console.error("Unexpected error signing out:", error)
   }
 }

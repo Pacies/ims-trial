@@ -29,7 +29,11 @@ export default function RawItemsPage() {
     setIsLoading(true)
     try {
       const data = await getRawMaterials()
-      setRawMaterials(data)
+      // Filter out any undefined or null items
+      const validData = data.filter(
+        (item): item is RawMaterial => item != null && typeof item === "object" && "id" in item,
+      )
+      setRawMaterials(validData)
     } catch (error) {
       console.error("Error loading raw materials:", error)
       toast({
@@ -46,16 +50,20 @@ export default function RawItemsPage() {
     loadRawMaterials()
   }, [loadRawMaterials])
 
-  const categories = [...new Set(rawMaterials.map((material) => material.category))]
+  // Get unique categories, filtering out undefined values
+  const categories = [
+    ...new Set(rawMaterials.filter((material) => material?.category).map((material) => material.category)),
+  ]
 
   useEffect(() => {
-    let filtered = rawMaterials
+    let filtered = rawMaterials.filter((material): material is RawMaterial => material != null)
+
     if (searchTerm) {
       filtered = filtered.filter(
         (material) =>
-          material.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           (material.sku && material.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          material.category.toLowerCase().includes(searchTerm.toLowerCase()),
+          material.category?.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
     if (categoryFilter !== "all") {
@@ -67,20 +75,38 @@ export default function RawItemsPage() {
     setFilteredMaterials(filtered)
   }, [rawMaterials, searchTerm, categoryFilter, statusFilter])
 
-  const handleItemAdded = (newItem: RawMaterial) => {
-    setRawMaterials((prev) => [newItem, ...prev])
+  const handleItemAdded = async (newItem: RawMaterial) => {
+    if (newItem && newItem.id) {
+      // Reload data from database to ensure consistency
+      await loadRawMaterials()
+      toast({
+        title: "Success",
+        description: "Raw material added and data refreshed.",
+      })
+    }
   }
 
-  const handleItemUpdated = (updatedItem: RawMaterial) => {
-    setRawMaterials((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
+  const handleItemUpdated = async (updatedItem: RawMaterial) => {
+    if (updatedItem && updatedItem.id) {
+      // Reload data from database to ensure consistency
+      await loadRawMaterials()
+      toast({
+        title: "Success",
+        description: "Raw material updated and data refreshed.",
+      })
+    }
   }
 
   const handleDelete = async (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
       const success = await deleteRawMaterial(id)
       if (success) {
-        toast({ title: "Raw material deleted", description: `${name} has been removed.` })
-        setRawMaterials((prev) => prev.filter((m) => m.id !== id))
+        // Reload data from database to ensure consistency
+        await loadRawMaterials()
+        toast({
+          title: "Raw material deleted",
+          description: `${name} has been removed and data refreshed.`,
+        })
       } else {
         toast({ title: "Error", description: "Failed to delete raw material.", variant: "destructive" })
       }
@@ -172,76 +198,81 @@ export default function RawItemsPage() {
               </Select>
             </div>
             <div className="rounded-md border">
-              <style jsx global>{`
-                .quantity-column {
-                  padding-right: 80px !important;
-                  margin-right: 20px !important;
-                }
-                .status-column {
-                  padding-left: 80px !important;
-                  margin-left: 20px !important;
-                }
-              `}</style>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead style={{ width: "12%" }}>SKU</TableHead>
-                    <TableHead style={{ width: "18%" }}>Name</TableHead>
-                    <TableHead style={{ width: "12%" }}>Category</TableHead>
-                    <TableHead className="text-right quantity-column" style={{ width: "18%" }}>
-                      Quantity
-                    </TableHead>
-                    <TableHead className="status-column" style={{ width: "25%" }}>
-                      Status
-                    </TableHead>
-                    <TableHead className="text-right" style={{ width: "15%" }}>
-                      Actions
-                    </TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="pr-8">Quantity</TableHead>
+                    <TableHead className="pr-8">Price</TableHead>
+                    <TableHead className="pl-6">Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredMaterials.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         {rawMaterials.length === 0
-                          ? "No raw materials found. Add your first one!"
-                          : "No materials match your search."}
+                          ? "No raw materials found. Add your first raw material to get started."
+                          : "No materials match your search criteria."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredMaterials.map((material, index) => (
-                      <TableRow key={`${material.id}-${index}`}>
-                        <TableCell className="font-mono text-sm">{material.sku}</TableCell>
-                        <TableCell>
-                          <p className="font-medium">{material.name}</p>
-                        </TableCell>
-                        <TableCell>{material.category}</TableCell>
-                        <TableCell className="text-right quantity-column">{material.quantity}</TableCell>
-                        <TableCell className="status-column">{getStatusBadge(material.status)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingMaterial(material)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-red-500 hover:text-red-600"
-                              onClick={() => handleDelete(material.id, material.name)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    filteredMaterials.map((material, index) => {
+                      // Additional safety check
+                      if (!material || !material.id) {
+                        return null
+                      }
+
+                      return (
+                        <TableRow key={`${material.id}-${index}`}>
+                          <TableCell className="font-mono text-sm">{material.sku || "N/A"}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{material.name || "Unnamed"}</p>
+                              {material.description && (
+                                <p className="text-sm text-muted-foreground">{material.description}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{material.category || "Uncategorized"}</TableCell>
+                          <TableCell className="pr-8">{material.quantity || 0}</TableCell>
+                          <TableCell className="pr-8">₱{(material.cost_per_unit || 0).toFixed(2)}</TableCell>
+                          <TableCell className="pl-6">{getStatusBadge(material.status || "unknown")}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => setEditingMaterial(material)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-600"
+                                onClick={() => handleDelete(material.id, material.name || "Unknown")}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>
             </div>
-            <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+            {/* Summary */}
+            <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
               <p>
-                Showing {filteredMaterials.length} of {rawMaterials.length} raw materials.
+                Showing {filteredMaterials.length} of {rawMaterials.length} raw materials
+              </p>
+              <p>
+                Total value: ₱
+                {rawMaterials
+                  .reduce((sum, material) => sum + (material.cost_per_unit || 0) * (material.quantity || 0), 0)
+                  .toLocaleString()}
               </p>
             </div>
           </CardContent>

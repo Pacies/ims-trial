@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 interface EditRawItemModalProps {
   material: RawMaterial
   onClose: () => void
-  onItemUpdated: () => void
+  onItemUpdated: (updatedItem: RawMaterial) => void
 }
 
 export default function EditRawItemModal({ material, onClose, onItemUpdated }: EditRawItemModalProps) {
@@ -23,6 +23,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
     name: "",
     quantity: "",
     category: "",
+    cost_per_unit: "",
   })
   const { toast } = useToast()
 
@@ -32,6 +33,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
         name: material.name,
         quantity: material.quantity.toString(),
         category: material.category || "",
+        cost_per_unit: material.cost_per_unit?.toString() || "0",
       })
     }
   }, [material])
@@ -41,19 +43,24 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
     setIsLoading(true)
 
     try {
-      const success = await updateRawMaterial(material.id, {
+      const updatedData = {
         name: formData.name,
         quantity: Number.parseFloat(formData.quantity),
         category: formData.category,
-      })
+        cost_per_unit: Number.parseFloat(formData.cost_per_unit),
+      }
 
-      if (success) {
+      const updatedMaterial = await updateRawMaterial(material.id, updatedData)
+
+      if (updatedMaterial) {
         toast({
           title: "Raw material updated successfully",
           description: `${formData.name} has been updated.`,
         })
+
+        // Call the callback function with the updated material
+        onItemUpdated(updatedMaterial)
         onClose()
-        onItemUpdated()
       } else {
         toast({
           title: "Error",
@@ -121,6 +128,20 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="cost_per_unit">Price per Unit *</Label>
+            <Input
+              id="cost_per_unit"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.cost_per_unit}
+              onChange={(e) => setFormData({ ...formData, cost_per_unit: e.target.value })}
+              placeholder="0.00"
+              required
+            />
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

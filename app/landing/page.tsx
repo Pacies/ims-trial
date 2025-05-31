@@ -36,10 +36,6 @@ export default function LandingPage() {
         <FloatingParticles />
 
         <div className="text-center text-white z-10 relative px-4">
-          <div className="w-30 h-30 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center font-bold text-5xl text-white mx-auto mb-8 shadow-2xl animate-bounce">
-            2K
-          </div>
-
           <h1 className="text-6xl md:text-7xl font-bold mb-4 bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">
             2K Inventory
           </h1>

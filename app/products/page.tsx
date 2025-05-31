@@ -71,23 +71,34 @@ export default function ProductInventoryPage() {
     setFilteredItems(filtered)
   }, [inventoryItems, searchTerm, categoryFilter, statusFilter])
 
-  const handleItemAdded = (newItem: InventoryItem) => {
-    setInventoryItems((prev) => [newItem, ...prev])
+  const handleItemAdded = async (newItem: InventoryItem) => {
+    // Reload data from database to ensure consistency
+    await loadInventoryItems()
+    toast({
+      title: "Success",
+      description: "Product added and data refreshed.",
+    })
   }
 
-  const handleItemUpdated = (updatedItem: InventoryItem) => {
-    setInventoryItems((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
+  const handleItemUpdated = async (updatedItem: InventoryItem) => {
+    // Reload data from database to ensure consistency
+    await loadInventoryItems()
+    toast({
+      title: "Success",
+      description: "Product updated and data refreshed.",
+    })
   }
 
   const handleDelete = async (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
       const success = await deleteInventoryItem(id)
       if (success) {
+        // Reload data from database to ensure consistency
+        await loadInventoryItems()
         toast({
           title: "Product deleted",
-          description: `${name} has been removed from your inventory.`,
+          description: `${name} has been removed and data refreshed.`,
         })
-        setInventoryItems((prev) => prev.filter((item) => item.id !== id))
       } else {
         toast({
           title: "Error",
@@ -219,14 +230,19 @@ export default function ProductInventoryPage() {
                         </TableCell>
                         <TableCell>{item.category}</TableCell>
                         <TableCell className="pr-8">{item.stock}</TableCell>
-                        <TableCell className="pr-8">${item.price.toFixed(2)}</TableCell>
+                        <TableCell className="pr-8">₱{item.price.toFixed(2)}</TableCell>
                         <TableCell className="pl-6">{getStatusBadge(item.status)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Button variant="ghost" size="sm" onClick={() => setEditingItem(item)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id, item.name)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-600"
+                              onClick={() => handleDelete(item.id, item.name)}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -244,7 +260,7 @@ export default function ProductInventoryPage() {
                 Showing {filteredItems.length} of {inventoryItems.length} products
               </p>
               <p>
-                Total value: ${inventoryItems.reduce((sum, item) => sum + item.price * item.stock, 0).toLocaleString()}
+                Total value: ₱{inventoryItems.reduce((sum, item) => sum + item.price * item.stock, 0).toLocaleString()}
               </p>
             </div>
           </CardContent>
