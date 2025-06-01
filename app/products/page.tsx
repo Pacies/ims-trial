@@ -8,12 +8,17 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Edit, Trash2, Package, RefreshCw } from "lucide-react"
-import { getInventoryItems, deleteInventoryItem, type InventoryItem } from "@/lib/database"
+import { getInventoryItems, deleteInventoryItem, updateInventoryItem, type InventoryItem } from "@/lib/database"
 import { useToast } from "@/hooks/use-toast"
 import AddItemModal from "@/components/add-item-modal"
 import EditItemModal from "@/components/edit-item-modal"
 import PageHeader from "@/components/page-header"
 import MainLayout from "@/components/main-layout"
+import dynamic from "next/dynamic";
+import ItemQRCode from "@/components/ui/item-qr-code"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+
+const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false });
 
 export default function ProductInventoryPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -23,6 +28,10 @@ export default function ProductInventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrProduct, setQRProduct] = useState<InventoryItem | null>(null);
   const { toast } = useToast()
 
   const loadInventoryItems = useCallback(async () => {
@@ -126,6 +135,51 @@ export default function ProductInventoryPage() {
     }
   }
 
+  const handleBarcodeScanned = async (result: { text: string; format: string } | null) => {
+    if (!result || isProcessingBarcode) return;
+    setIsProcessingBarcode(true);
+    try {
+      let barcode = result.text;
+      let type = result.format;
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(barcode);
+      } catch (e) {}
+      if (parsed && parsed.type === "item_update" && parsed.itemId) {
+        const product = inventoryItems.find(item => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId);
+        if (product) {
+          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 });
+          if (updatedItem) {
+            toast({ title: 'Stock Incremented', description: `Stock for ${product.name} incremented to ${updatedItem.stock}` });
+            await loadInventoryItems();
+          } else {
+            toast({ title: 'Error', description: 'Failed to update product stock.', variant: 'destructive' });
+          }
+        } else {
+          window.alert('QR code does not match any product.');
+        }
+      } else {
+        const product = inventoryItems.find(item => item.sku === barcode);
+        if (product) {
+          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 });
+          if (updatedItem) {
+            toast({ title: 'Stock Incremented', description: `Stock for ${product.name} incremented to ${updatedItem.stock}` });
+            await loadInventoryItems();
+          } else {
+            toast({ title: 'Error', description: 'Failed to update product stock.', variant: 'destructive' });
+          }
+        } else {
+          window.alert('Product Not Found. Would you like to add this product?');
+        }
+      }
+      setShowBarcodeScanner(false);
+    } catch (error) {
+      window.alert('Error: Failed to process barcode scan');
+    } finally {
+      setIsProcessingBarcode(false);
+    }
+  };
+
   if (isLoading && inventoryItems.length === 0) {
     return (
       <MainLayout>
@@ -140,7 +194,9 @@ export default function ProductInventoryPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <PageHeader title="Products" description="Manage your finished products and inventory" icon={Package} />
+        <PageHeader title="Products">
+          <span className="text-muted-foreground text-base">Manage your finished products and inventory</span>
+        </PageHeader>
 
         <Card>
           <CardHeader>
@@ -193,6 +249,14 @@ export default function ProductInventoryPage() {
                   <SelectItem value="out-of-stock">Out of Stock</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                type="button"
+                className="bg-blue-600 text-white"
+                onClick={() => setShowBarcodeScanner(true)}
+                disabled={isProcessingBarcode}
+              >
+                📱 Scan QR/Barcode
+              </Button>
             </div>
 
             {/* Products Table */}
@@ -245,6 +309,14 @@ export default function ProductInventoryPage() {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => { setQRProduct(item); setShowQRModal(true); }}
+                              title="Show QR Code"
+                            >
+                              Show QR
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -268,8 +340,48 @@ export default function ProductInventoryPage() {
 
         {/* Edit Modal */}
         {editingItem && (
-          <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} onItemUpdated={handleItemUpdated} />
+          <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} onItemUpdated={() => {}} />
         )}
+
+        {/* QR Code Scanner Dialog */}
+        <Dialog open={showBarcodeScanner} onOpenChange={setShowBarcodeScanner}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Scan QR/Barcode</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center">
+              {/* @ts-ignore: react-qr-barcode-scanner types may be incorrect */}
+              <BarcodeScanner
+                // @ts-ignore
+                onUpdate={(err, result) => {
+                  if (result) {
+                    // @ts-ignore
+                    const text = result.getText ? result.getText() : result.text;
+                    handleBarcodeScanned({ text, format: "qr" });
+                  }
+                }}
+                // @ts-ignore
+                constraints={{ facingMode: "environment" }}
+                style={{ width: "100%" }}
+              />
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setShowBarcodeScanner(false)}
+                disabled={isProcessingBarcode}
+              >
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* QR Code Modal */}
+        <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
+          <DialogContent className="max-w-xs flex justify-center items-center p-4">
+            {qrProduct && <ItemQRCode itemId={qrProduct.id.toString()} itemName={qrProduct.name} />}
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )

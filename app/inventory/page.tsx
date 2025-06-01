@@ -8,32 +8,37 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Edit, Trash2, Package, RefreshCw } from "lucide-react"
-import { getRawMaterials, deleteRawMaterial, type RawMaterial } from "@/lib/database"
+import { getRawMaterials, deleteRawMaterial, updateRawMaterial, type RawMaterial } from "@/lib/database"
 import { useToast } from "@/hooks/use-toast"
 import AddRawItemModal from "@/components/add-raw-item-modal"
 import EditRawItemModal from "@/components/edit-raw-item-modal"
 import PageHeader from "@/components/page-header"
 import MainLayout from "@/components/main-layout"
+import dynamic from "next/dynamic";
+import ItemQRCode from "@/components/ui/item-qr-code"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-export default function RawItemsPage() {
+const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false });
+
+export default function RawMaterialInventoryPage() {
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([])
   const [filteredMaterials, setFilteredMaterials] = useState<RawMaterial[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null)
+  const [editingItem, setEditingItem] = useState<RawMaterial | null>(null)
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrMaterial, setQRMaterial] = useState<RawMaterial | null>(null);
   const { toast } = useToast()
 
   const loadRawMaterials = useCallback(async () => {
     setIsLoading(true)
     try {
       const data = await getRawMaterials()
-      // Filter out any undefined or null items
-      const validData = data.filter(
-        (item): item is RawMaterial => item != null && typeof item === "object" && "id" in item,
-      )
-      setRawMaterials(validData)
+      setRawMaterials(data)
     } catch (error) {
       console.error("Error loading raw materials:", error)
       toast({
@@ -50,51 +55,41 @@ export default function RawItemsPage() {
     loadRawMaterials()
   }, [loadRawMaterials])
 
-  // Get unique categories, filtering out undefined values
-  const categories = [
-    ...new Set(rawMaterials.filter((material) => material?.category).map((material) => material.category)),
-  ]
+  const categories = [...new Set(rawMaterials.map((item) => item.category))]
 
   useEffect(() => {
-    let filtered = rawMaterials.filter((material): material is RawMaterial => material != null)
+    let filtered = rawMaterials
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (material) =>
-          material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (material.sku && material.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          material.category?.toLowerCase().includes(searchTerm.toLowerCase()),
+        (item) =>
+          item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (item.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (item.category || "").toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
+
     if (categoryFilter !== "all") {
-      filtered = filtered.filter((material) => material.category === categoryFilter)
+      filtered = filtered.filter((item) => item.category === categoryFilter)
     }
+
     if (statusFilter !== "all") {
-      filtered = filtered.filter((material) => material.status === statusFilter)
+      filtered = filtered.filter((item) => item.status === statusFilter)
     }
+
     setFilteredMaterials(filtered)
   }, [rawMaterials, searchTerm, categoryFilter, statusFilter])
 
   const handleItemAdded = async (newItem: RawMaterial) => {
-    if (newItem && newItem.id) {
-      // Reload data from database to ensure consistency
-      await loadRawMaterials()
-      toast({
-        title: "Success",
-        description: "Raw material added and data refreshed.",
-      })
-    }
+    // Reload data from database to ensure consistency
+    await loadRawMaterials()
+    toast({ title: "Success", description: "Raw material added and data refreshed." })
   }
 
   const handleItemUpdated = async (updatedItem: RawMaterial) => {
-    if (updatedItem && updatedItem.id) {
-      // Reload data from database to ensure consistency
-      await loadRawMaterials()
-      toast({
-        title: "Success",
-        description: "Raw material updated and data refreshed.",
-      })
-    }
+    // Reload data from database to ensure consistency
+    await loadRawMaterials()
+    toast({ title: "Success", description: "Raw material updated and data refreshed." })
   }
 
   const handleDelete = async (id: number, name: string) => {
@@ -103,12 +98,9 @@ export default function RawItemsPage() {
       if (success) {
         // Reload data from database to ensure consistency
         await loadRawMaterials()
-        toast({
-          title: "Raw material deleted",
-          description: `${name} has been removed and data refreshed.`,
-        })
+        toast({ title: "Raw material deleted", description: `${name} has been removed and data refreshed.` })
       } else {
-        toast({ title: "Error", description: "Failed to delete raw material.", variant: "destructive" })
+        toast({ title: "Error", description: "Failed to delete raw material. Please try again.", variant: "destructive" })
       }
     }
   }
@@ -130,13 +122,57 @@ export default function RawItemsPage() {
     }
   }
 
+  const handleBarcodeScanned = async (result: { text: string; format: string } | null) => {
+    if (!result || isProcessingBarcode) return;
+    setIsProcessingBarcode(true);
+    try {
+      let barcode = result.text;
+      let type = result.format;
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(barcode);
+      } catch (e) {}
+      if (parsed && parsed.type === "raw_material_update" && parsed.itemId) {
+        const material = rawMaterials.find(item => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId);
+        if (material) {
+          const updatedMaterial = await updateRawMaterial(material.id, { quantity: material.quantity + 1 });
+          if (updatedMaterial) {
+            toast({ title: 'Quantity Incremented', description: `Quantity for ${material.name} incremented to ${updatedMaterial.quantity}` });
+            await loadRawMaterials();
+          } else {
+            toast({ title: 'Error', description: 'Failed to update material quantity.', variant: 'destructive' });
+          }
+        } else {
+          window.alert('QR code does not match any raw material.');
+        }
+      } else {
+        const material = rawMaterials.find(item => item.sku === barcode);
+        if (material) {
+          const updatedMaterial = await updateRawMaterial(material.id, { quantity: material.quantity + 1 });
+          if (updatedMaterial) {
+            toast({ title: 'Quantity Incremented', description: `Quantity for ${material.name} incremented to ${updatedMaterial.quantity}` });
+            await loadRawMaterials();
+          } else {
+            toast({ title: 'Error', description: 'Failed to update material quantity.', variant: 'destructive' });
+          }
+        } else {
+          window.alert('Raw Material Not Found. Would you like to add this material?');
+        }
+      }
+      setShowBarcodeScanner(false);
+    } catch (error) {
+      window.alert('Error: Failed to process barcode scan');
+    } finally {
+      setIsProcessingBarcode(false);
+    }
+  };
+
   if (isLoading && rawMaterials.length === 0) {
     return (
       <MainLayout>
-        <div className="p-6 animate-pulse space-y-4">
-          <div className="h-10 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-12 bg-gray-200 rounded w-full"></div>
-          <div className="h-64 bg-gray-200 rounded w-full"></div>
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-48"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
         </div>
       </MainLayout>
     )
@@ -144,14 +180,17 @@ export default function RawItemsPage() {
 
   return (
     <MainLayout>
-      <div className="p-6 space-y-6">
-        <PageHeader title="Raw Materials" description="Manage your raw materials and components" icon={Package} />
+      <div className="space-y-6">
+        <PageHeader title="Raw Materials">
+          <span className="text-muted-foreground text-base">Manage your raw materials and inventory</span>
+        </PageHeader>
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Raw Materials Inventory</CardTitle>
-                <CardDescription>Track and manage your raw materials and components</CardDescription>
+                <CardTitle>Raw Material Inventory</CardTitle>
+                <CardDescription>Track and manage your raw materials</CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="icon" onClick={loadRawMaterials} disabled={isLoading}>
@@ -162,11 +201,12 @@ export default function RawItemsPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search by name, category..."
+                  placeholder="Search raw materials..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -179,9 +219,11 @@ export default function RawItemsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map((category, index) => (
-                    <SelectItem key={`${category}-${index}`} value={category}>
-                      {category}
-                    </SelectItem>
+                    category && (
+                      <SelectItem key={`${category}-${index}`} value={category}>
+                        {category}
+                      </SelectItem>
+                    )
                   ))}
                 </SelectContent>
               </Select>
@@ -196,16 +238,26 @@ export default function RawItemsPage() {
                   <SelectItem value="out-of-stock">Out of Stock</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                type="button"
+                className="bg-blue-600 text-white"
+                onClick={() => setShowBarcodeScanner(true)}
+                disabled={isProcessingBarcode}
+              >
+                📱 Scan QR/Barcode
+              </Button>
             </div>
+
+            {/* Raw Materials Table */}
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>SKU</TableHead>
-                    <TableHead>Material</TableHead>
+                    <TableHead>Raw Material</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead className="pr-8">Quantity</TableHead>
-                    <TableHead className="pr-8">Price</TableHead>
+                    <TableHead className="pr-8">Cost/Unit</TableHead>
                     <TableHead className="pl-6">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -215,75 +267,113 @@ export default function RawItemsPage() {
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         {rawMaterials.length === 0
-                          ? "No raw materials found. Add your first raw material to get started."
-                          : "No materials match your search criteria."}
+                          ? "No raw materials found. Add your first material to get started."
+                          : "No raw materials match your search criteria."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredMaterials.map((material, index) => {
-                      // Additional safety check
-                      if (!material || !material.id) {
-                        return null
-                      }
-
-                      return (
-                        <TableRow key={`${material.id}-${index}`}>
-                          <TableCell className="font-mono text-sm">{material.sku || "N/A"}</TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{material.name || "Unnamed"}</p>
-                              {material.description && (
-                                <p className="text-sm text-muted-foreground">{material.description}</p>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{material.category || "Uncategorized"}</TableCell>
-                          <TableCell className="pr-8">{material.quantity || 0}</TableCell>
-                          <TableCell className="pr-8">₱{(material.cost_per_unit || 0).toFixed(2)}</TableCell>
-                          <TableCell className="pl-6">{getStatusBadge(material.status || "unknown")}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => setEditingMaterial(material)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-500 hover:text-red-600"
-                                onClick={() => handleDelete(material.id, material.name || "Unknown")}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
+                    filteredMaterials.map((item, index) => (
+                      <TableRow key={`${item.id}-${index}`}>
+                        <TableCell className="font-mono text-sm">{item.sku}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
+                          </div>
+                        </TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell className="pr-8">{item.quantity}</TableCell>
+                        <TableCell className="pr-8">₱{item.cost_per_unit.toFixed(2)}</TableCell>
+                        <TableCell className="pl-6">{getStatusBadge(item.status)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => setEditingItem(item)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-600"
+                              onClick={() => handleDelete(item.id, item.name)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => { setQRMaterial(item); setShowQRModal(true); }}
+                              title="Show QR Code"
+                            >
+                              Show QR
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )
+                  }
                 </TableBody>
               </Table>
             </div>
+
             {/* Summary */}
             <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
               <p>
                 Showing {filteredMaterials.length} of {rawMaterials.length} raw materials
               </p>
               <p>
-                Total value: ₱
-                {rawMaterials
-                  .reduce((sum, material) => sum + (material.cost_per_unit || 0) * (material.quantity || 0), 0)
-                  .toLocaleString()}
+                Total value: ₱{rawMaterials.reduce((sum, item) => sum + item.cost_per_unit * item.quantity, 0).toLocaleString()}
               </p>
             </div>
           </CardContent>
         </Card>
-        {editingMaterial && (
-          <EditRawItemModal
-            material={editingMaterial}
-            onClose={() => setEditingMaterial(null)}
-            onItemUpdated={handleItemUpdated}
-          />
+
+        {/* Edit Modal */}
+        {editingItem && (
+          <EditRawItemModal material={editingItem} onClose={() => setEditingItem(null)} onItemUpdated={handleItemUpdated} />
         )}
+
+        {/* QR Code Scanner Dialog */}
+        <Dialog open={showBarcodeScanner} onOpenChange={setShowBarcodeScanner}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Scan QR/Barcode</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center">
+              {/* @ts-ignore: react-qr-barcode-scanner types may be incorrect */}
+              <BarcodeScanner
+                // @ts-ignore
+                onUpdate={(err, result) => {
+                  if (result) {
+                    // @ts-ignore
+                    const text = result.getText ? result.getText() : result.text;
+                    handleBarcodeScanned({ text, format: "qr" });
+                  }
+                }}
+                // @ts-ignore
+                constraints={{ facingMode: "environment" }}
+                style={{ width: "100%" }}
+              />
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setShowBarcodeScanner(false)}
+                disabled={isProcessingBarcode}
+              >
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* QR Code Modal */}
+        <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
+          <DialogContent className="max-w-xs flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center w-full h-full">
+              {qrMaterial && <ItemQRCode itemId={qrMaterial.id.toString()} itemName={qrMaterial.name} />}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )

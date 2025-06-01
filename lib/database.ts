@@ -104,7 +104,7 @@ export async function isAdmin(): Promise<boolean> {
 // Helper function to check if user has staff or admin privileges
 export async function isStaffOrAdmin(): Promise<boolean> {
   const user = await getCurrentUser()
-  return user?.user_type && ["admin", "staff"].includes(user.user_type)
+  return !!user?.user_type && ["admin", "staff"].includes(user.user_type)
 }
 
 // Test function to check database connection and data
@@ -121,7 +121,7 @@ export async function testDatabaseConnection(): Promise<void> {
 
     // Test users table
     console.log("Testing users table...")
-    const { data: users, error: usersError } = await supabase.from("users").select("*")
+    const { data: users, error: usersError } = await supabase!.from("users").select("*")
 
     if (usersError) {
       console.error("Error fetching users:", {
@@ -137,7 +137,7 @@ export async function testDatabaseConnection(): Promise<void> {
 
     // Test user_passwords table
     console.log("Testing user_passwords table...")
-    const { data: passwords, error: passwordsError } = await supabase
+    const { data: passwords, error: passwordsError } = await supabase!
       .from("user_passwords")
       .select("user_id, password_hash")
 
@@ -174,7 +174,7 @@ export async function authenticateUser(username: string, password: string): Prom
 
     // Get user by username with detailed error handling
     console.log("Looking up user...")
-    const { data: user, error: userError } = await supabase
+    const { data: user, error: userError } = await supabase!
       .from("users")
       .select("*")
       .eq("username", username)
@@ -205,7 +205,7 @@ export async function authenticateUser(username: string, password: string): Prom
 
     // Get password for user
     console.log("Looking up password...")
-    const { data: passwordData, error: passwordError } = await supabase
+    const { data: passwordData, error: passwordError } = await supabase!
       .from("user_passwords")
       .select("password_hash")
       .eq("user_id", user.id)
@@ -238,7 +238,7 @@ export async function authenticateUser(username: string, password: string): Prom
 
     // Update last login
     try {
-      await supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id)
+      await supabase!.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id)
     } catch (updateError) {
       console.warn("Failed to update last login:", updateError)
     }
@@ -261,7 +261,7 @@ export async function authenticateUser(username: string, password: string): Prom
 // Database operations for fixed prices
 export async function getFixedPrices(itemType: "raw_material" | "product", category?: string): Promise<FixedPrice[]> {
   try {
-    let query = supabase.from("fixed_prices").select("*").eq("item_type", itemType).eq("is_active", true)
+    let query = supabase!.from("fixed_prices").select("*").eq("item_type", itemType).eq("is_active", true)
 
     if (category) {
       query = query.eq("category", category)
@@ -285,7 +285,7 @@ export async function addFixedPrice(
   priceData: Omit<FixedPrice, "id" | "created_at" | "updated_at">,
 ): Promise<FixedPrice | null> {
   try {
-    const { data, error } = await supabase.from("fixed_prices").insert(priceData).select().single()
+    const { data, error } = await supabase!.from("fixed_prices").insert(priceData).select().single()
 
     if (error) {
       console.error("Error adding fixed price:", error)
@@ -302,7 +302,7 @@ export async function addFixedPrice(
 
 export async function updateFixedPrice(id: number, updates: Partial<FixedPrice>): Promise<FixedPrice | null> {
   try {
-    const { data, error } = await supabase.from("fixed_prices").update(updates).eq("id", id).select().single()
+    const { data, error } = await supabase!.from("fixed_prices").update(updates).eq("id", id).select().single()
 
     if (error) {
       console.error("Error updating fixed price:", error)
@@ -319,7 +319,7 @@ export async function updateFixedPrice(id: number, updates: Partial<FixedPrice>)
 
 export async function deleteFixedPrice(id: number): Promise<boolean> {
   try {
-    const { error } = await supabase.from("fixed_prices").delete().eq("id", id)
+    const { error } = await supabase!.from("fixed_prices").delete().eq("id", id)
 
     if (error) {
       console.error("Error deleting fixed price:", error)
@@ -338,7 +338,7 @@ export async function deleteFixedPrice(id: number): Promise<boolean> {
 export async function getInventoryItems(): Promise<InventoryItem[]> {
   try {
     console.log("Fetching inventory items...")
-    const { data, error } = await supabase.from("inventory_items").select("*").order("created_at", { ascending: false })
+    const { data, error } = await supabase!.from("inventory_items").select("*").order("created_at", { ascending: false })
 
     if (error) {
       console.error("Error fetching inventory items:", error)
@@ -356,7 +356,7 @@ export async function addInventoryItem(
   item: Omit<InventoryItem, "id" | "created_at" | "updated_at" | "sku" | "status" | "description" | "image_url">,
 ): Promise<InventoryItem | null> {
   try {
-    const { data: existingItems } = await supabase
+    const { data: existingItems } = await supabase!
       .from("inventory_items")
       .select("sku")
       .like("sku", "PRD-%")
@@ -379,7 +379,7 @@ export async function addInventoryItem(
 
     const newItem = { ...item, sku, status, price: item.price || 0 }
 
-    const { data, error } = await supabase.from("inventory_items").insert(newItem).select().single()
+    const { data, error } = await supabase!.from("inventory_items").insert(newItem).select().single()
 
     if (error) {
       console.error("Error adding inventory item:", error)
@@ -406,7 +406,7 @@ export async function updateInventoryItem(id: number, updates: Partial<Inventory
       updated_at: new Date().toISOString(),
     }
 
-    const { data, error } = await supabase.from("inventory_items").update(updateData).eq("id", id).select().single()
+    const { data, error } = await supabase!.from("inventory_items").update(updateData).eq("id", id).select().single()
 
     if (error) {
       console.error("Error updating inventory item:", error)
@@ -423,7 +423,7 @@ export async function updateInventoryItem(id: number, updates: Partial<Inventory
 
 export async function deleteInventoryItem(id: number): Promise<boolean> {
   try {
-    const { error } = await supabase.from("inventory_items").delete().eq("id", id)
+    const { error } = await supabase!.from("inventory_items").delete().eq("id", id)
     if (error) {
       console.error("Error deleting inventory item:", error)
       return false
@@ -439,7 +439,7 @@ export async function deleteInventoryItem(id: number): Promise<boolean> {
 // Database operations for raw materials
 export async function getRawMaterials(): Promise<RawMaterial[]> {
   try {
-    const { data, error } = await supabase.from("raw_materials").select("*").order("created_at", { ascending: false })
+    const { data, error } = await supabase!.from("raw_materials").select("*").order("created_at", { ascending: false })
 
     if (error) {
       console.error("Error fetching raw materials:", error)
@@ -477,7 +477,7 @@ export async function addRawMaterial(
   > & { quantity: number; category: string; name: string; cost_per_unit: number },
 ): Promise<RawMaterial | null> {
   try {
-    const { data: existingMaterials } = await supabase
+    const { data: existingMaterials } = await supabase!
       .from("raw_materials")
       .select("sku")
       .like("sku", "RAW-%")
@@ -504,7 +504,7 @@ export async function addRawMaterial(
 
     const newMaterial = { ...material, sku, status, unit, reorder_level }
 
-    const { data, error } = await supabase.from("raw_materials").insert(newMaterial).select().single()
+    const { data, error } = await supabase!.from("raw_materials").insert(newMaterial).select().single()
 
     if (error) {
       console.error("Error adding raw material:", error)
@@ -522,7 +522,7 @@ export async function updateRawMaterial(id: number, updates: Partial<RawMaterial
   try {
     // Calculate status based on quantity and reorder level
     if (updates.quantity !== undefined || updates.reorder_level !== undefined) {
-      const { data: currentMaterial } = await supabase
+      const { data: currentMaterial } = await supabase!
         .from("raw_materials")
         .select("quantity, reorder_level")
         .eq("id", id)
@@ -542,7 +542,7 @@ export async function updateRawMaterial(id: number, updates: Partial<RawMaterial
       updated_at: new Date().toISOString(),
     }
 
-    const { data, error } = await supabase.from("raw_materials").update(updateData).eq("id", id).select().single()
+    const { data, error } = await supabase!.from("raw_materials").update(updateData).eq("id", id).select().single()
 
     if (error) {
       console.error("Error updating raw material:", error)
@@ -559,7 +559,7 @@ export async function updateRawMaterial(id: number, updates: Partial<RawMaterial
 
 export async function deleteRawMaterial(id: number): Promise<boolean> {
   try {
-    const { error } = await supabase.from("raw_materials").delete().eq("id", id)
+    const { error } = await supabase!.from("raw_materials").delete().eq("id", id)
     if (error) {
       console.error("Error deleting raw material:", error)
       return false
@@ -574,7 +574,7 @@ export async function deleteRawMaterial(id: number): Promise<boolean> {
 
 // Database operations for users
 export async function getUsers(): Promise<User[]> {
-  const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase!.from("users").select("*").order("created_at", { ascending: false })
   if (error) {
     console.error("Error fetching users:", error)
     return []
@@ -585,7 +585,7 @@ export async function getUsers(): Promise<User[]> {
 export async function addUser(
   userData: Omit<User, "id" | "created_at" | "updated_at" | "last_login">,
 ): Promise<User | null> {
-  const { data, error } = await supabase.from("users").insert([userData]).select()
+  const { data, error } = await supabase!.from("users").insert([userData]).select()
   if (error) {
     console.error("Error adding user:", error)
     return null
@@ -594,7 +594,7 @@ export async function addUser(
 }
 
 export async function addUserPassword(userId: string, password: string): Promise<boolean> {
-  const { data, error } = await supabase.from("user_passwords").insert([
+  const { data, error } = await supabase!.from("user_passwords").insert([
     {
       user_id: userId,
       password_hash: password,
@@ -609,10 +609,10 @@ export async function addUserPassword(userId: string, password: string): Promise
 }
 
 export async function updateUserPassword(userId: string, password: string): Promise<boolean> {
-  const { data: existingPassword } = await supabase.from("user_passwords").select("*").eq("user_id", userId).single()
+  const { data: existingPassword } = await supabase!.from("user_passwords").select("*").eq("user_id", userId).single()
 
   if (existingPassword) {
-    const { error } = await supabase
+    const { error } = await supabase!
       .from("user_passwords")
       .update({ password_hash: password, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
@@ -629,7 +629,7 @@ export async function updateUserPassword(userId: string, password: string): Prom
 }
 
 export async function updateUser(id: string, userData: Partial<User>): Promise<User | null> {
-  const { data, error } = await supabase
+  const { data, error } = await supabase!
     .from("users")
     .update({ ...userData, updated_at: new Date().toISOString() })
     .eq("id", id)
@@ -643,8 +643,8 @@ export async function updateUser(id: string, userData: Partial<User>): Promise<U
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
-  await supabase.from("user_passwords").delete().eq("user_id", id)
-  const { error } = await supabase.from("users").delete().eq("id", id)
+  await supabase!.from("user_passwords").delete().eq("user_id", id)
+  const { error } = await supabase!.from("users").delete().eq("id", id)
   if (error) {
     console.error("Error deleting user:", error)
     return false
@@ -655,7 +655,7 @@ export async function deleteUser(id: string): Promise<boolean> {
 // Database operations for activities
 export async function getActivities(): Promise<Activity[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from("activities")
       .select("*")
       .order("created_at", { ascending: false })
@@ -674,7 +674,7 @@ export async function getActivities(): Promise<Activity[]> {
 export async function logActivity(action: string, description: string): Promise<void> {
   try {
     const user = await getCurrentUser()
-    await supabase.from("activities").insert([{ user_id: user?.id || null, action, description }])
+    await supabase!.from("activities").insert([{ user_id: user?.id || null, action, description }])
   } catch (error: any) {
     console.error("Error logging activity:", error)
   }
@@ -682,7 +682,7 @@ export async function logActivity(action: string, description: string): Promise<
 
 export async function signOut(): Promise<void> {
   try {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabase!.auth.signOut()
     if (error) {
       console.error("Error signing out:", error)
     }
