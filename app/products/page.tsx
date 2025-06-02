@@ -182,7 +182,9 @@ export default function ProductInventoryPage() {
       } catch (e) {}
       if (parsed && parsed.type === "item_update" && parsed.itemId) {
         const product = inventoryItems.find(
-          (item) => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId,
+          (item) =>
+            item.id.toString() === parsed.itemId.toString() ||
+            item.sku.toString() === parsed.itemId.toString()
         )
         if (product) {
           const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
@@ -199,7 +201,11 @@ export default function ProductInventoryPage() {
           window.alert("QR code does not match any product.")
         }
       } else {
-        const product = inventoryItems.find((item) => item.sku === barcode)
+        const product = inventoryItems.find(
+          (item) =>
+            item.sku.toString() === barcode.toString() ||
+            item.id.toString() === barcode.toString()
+        )
         if (product) {
           const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
           if (updatedItem) {
