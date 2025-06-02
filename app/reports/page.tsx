@@ -86,15 +86,19 @@ export default function ReportsPage() {
 
     setIsGenerating(true)
     try {
+      console.log("🚀 Starting report generation for:", selectedReport)
+
       let reportData: any
       let reportTitle: string
 
       switch (selectedReport) {
         case "inventory-summary":
+          console.log("📊 Generating inventory summary...")
           reportData = await generateInventorySummary()
           reportTitle = "Inventory Summary Report"
           break
         case "low-stock":
+          console.log("⚠️ Generating low stock report...")
           reportData = await generateLowStockReport()
           reportTitle = "Low Stock Report"
           break
@@ -102,7 +106,10 @@ export default function ReportsPage() {
           throw new Error("Invalid report type")
       }
 
-      // Save report to database
+      console.log("✅ Report data generated successfully")
+
+      // Save report to database with better error handling
+      console.log("💾 Saving report to database...")
       const savedReport = await saveReport(
         reportTitle,
         selectedReport as any,
@@ -112,6 +119,7 @@ export default function ReportsPage() {
       )
 
       if (savedReport) {
+        console.log("✅ Report saved with ID:", savedReport.id)
         setCurrentReport(savedReport)
         setShowPreview(true)
         await loadSavedReports()
@@ -121,13 +129,33 @@ export default function ReportsPage() {
           description: "Report generated successfully",
         })
       } else {
-        throw new Error("Failed to save report")
+        console.error("❌ Failed to save report - no data returned")
+
+        // Still show the report even if saving failed
+        const tempReport: Report = {
+          id: Date.now(), // Temporary ID
+          title: reportTitle,
+          type: selectedReport as any,
+          content: reportData,
+          generated_by: "Current User",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+
+        setCurrentReport(tempReport)
+        setShowPreview(true)
+
+        toast({
+          title: "Warning",
+          description: "Report generated but could not be saved to database. You can still view and export it.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("Error generating report:", error)
+      console.error("💥 Error in report generation:", error)
       toast({
         title: "Error",
-        description: "Failed to generate report",
+        description: `Failed to generate report: ${error instanceof Error ? error.message : "Unknown error"}`,
         variant: "destructive",
       })
     } finally {
