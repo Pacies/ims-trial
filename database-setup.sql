@@ -1,6 +1,6 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
+    
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -119,37 +119,38 @@ SELECT id, 'staff123' FROM users WHERE username = 'staff';
 
 -- Insert sample inventory items
 INSERT INTO inventory_items (name, category, price, stock, sku, status) VALUES
-('T-Shirt', 'Top', 200.00, 50, 'PRD-0001', 'in-stock'),
-('Pajama', 'Bottom', 150.00, 50, 'PRD-0002', 'in-stock'),
-('Polo Shirt', 'Top', 300.00, 25, 'PRD-0003', 'in-stock'),
-('Shorts', 'Bottom', 150.00, 15, 'PRD-0004', 'in-stock'),
-('Blouse', 'Top', 200.00, 8, 'PRD-0005', 'low-stock'),
-('Pants', 'Bottom', 400.00, 0, 'PRD-0006', 'out-of-stock');
+('Classic T-Shirt', 'top', 19.99, 50, 'PRD-0001', 'in-stock'),
+('Denim Jeans', 'bottom', 49.99, 30, 'PRD-0002', 'in-stock'),
+('Polo Shirt', 'top', 29.99, 25, 'PRD-0003', 'in-stock'),
+('Cargo Shorts', 'bottom', 34.99, 15, 'PRD-0004', 'in-stock'),
+('Hoodie', 'top', 39.99, 8, 'PRD-0005', 'low-stock'),
+('Chino Pants', 'bottom', 44.99, 0, 'PRD-0006', 'out-of-stock');
 
 -- Insert sample raw materials
 INSERT INTO raw_materials (name, category, quantity, unit, cost_per_unit, supplier, sku, status) VALUES
-('Cotton Fabric', 'Fabric', 100, 'rolls', 1000.00, 'Textile Co.', 'RAW-0001', 'in-stock'),
-('Denim Fabric', 'Fabric', 75, 'rolls', 2000.00, 'Denim Supply', 'RAW-0002', 'in-stock'),
-('Polyester Thread', 'Sewing', 200, 'pieces', 40.00, 'Thread Works', 'RAW-0003', 'in-stock'),
-('Buttons', 'Sewing', 500, 'pieces', 5.00, 'Button Factory', 'RAW-0004', 'in-stock'),
-('Zippers', 'Sewing', 50, 'pieces', 5.00, 'Zip Co.', 'RAW-0005', 'in-stock');
+('Cotton Fabric', 'fabric', 100, 'yards', 5.50, 'Textile Co.', 'RAW-0001', 'in-stock'),
+('Denim Fabric', 'fabric', 75, 'yards', 8.00, 'Denim Supply', 'RAW-0002', 'in-stock'),
+('Polyester Thread', 'thread', 200, 'spools', 2.25, 'Thread Works', 'RAW-0003', 'in-stock'),
+('Metal Buttons', 'hardware', 500, 'pieces', 0.15, 'Button Factory', 'RAW-0004', 'in-stock'),
+('Zippers', 'hardware', 50, 'pieces', 1.50, 'Zip Co.', 'RAW-0005', 'in-stock'),
+('Elastic Band', 'trim', 25, 'yards', 3.00, 'Elastic Supply', 'RAW-0006', 'in-stock');
 
 -- Insert sample fixed prices for raw materials
 INSERT INTO fixed_prices (item_type, category, item_name, price, is_active) VALUES
-('raw_material', 'Fabric', 'Cotton Fabric', 1000.00, true),
-('raw_material', 'Fabric', 'Denim Fabric', 2000.00, true),
-('raw_material', 'Fabric', 'Polyester Fabric', 1500.00, true),
-('raw_material', 'Sewing', 'Buttons', 5.00, true),
-('raw_material', 'Sewing', 'Thread', 40.00, true),
-('raw_material', 'Sewing', 'Zipper', 5.00, true),
-('raw_material', 'Sewing', 'Needle', 5.00, true),
-('raw_material', 'Sewing', 'Scissors', 20.00, true),
-('product', 'Top', 'T-Shirt', 200.00, true),
-('product', 'Top', 'Polo Shirt', 300.00, true),
-('product', 'Top', 'Blouse', 200.00, true),
-('product', 'Bottom', 'Pajama', 150.00, true),
-('product', 'Bottom', 'Shorts', 150.00, true),
-('product', 'Bottom', 'Pants', 400.00, true);
+('raw_material', 'Fabric', 'Cotton Fabric', 5.50, true),
+('raw_material', 'Fabric', 'Denim Fabric', 8.00, true),
+('raw_material', 'Fabric', 'Polyester Fabric', 6.25, true),
+('raw_material', 'Sewing', 'Buttons', 0.15, true),
+('raw_material', 'Sewing', 'Thread', 2.25, true),
+('raw_material', 'Sewing', 'Zipper', 1.50, true),
+('raw_material', 'Sewing', 'Needle', 0.50, true),
+('raw_material', 'Sewing', 'Scissors', 12.99, true),
+('product', 'top', 'Classic T-Shirt', 19.99, true),
+('product', 'top', 'Polo Shirt', 29.99, true),
+('product', 'top', 'Hoodie', 39.99, true),
+('product', 'bottom', 'Denim Jeans', 49.99, true),
+('product', 'bottom', 'Cargo Shorts', 34.99, true),
+('product', 'bottom', 'Chino Pants', 44.99, true);
 
 -- Insert sample activities
 INSERT INTO activities (user_id, action, description) 
