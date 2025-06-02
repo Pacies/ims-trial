@@ -1,6 +1,6 @@
 import { supabase, testSupabaseConnection } from "./supabaseClient"
 
-// Types for our database tables - updated for normalized schema
+// Types for our database tables
 export type User = {
   id: string
   username: string
@@ -24,14 +24,11 @@ export interface InventoryItem {
   name: string
   description?: string
   category: string
-  category_id?: number
   price: number
   stock: number
   sku: string
   status: "in-stock" | "low-stock" | "out-of-stock"
-  status_id?: number
   image_url?: string
-  reorder_level?: number
   created_at: string
   updated_at: string
 }
@@ -41,7 +38,6 @@ export interface RawMaterial {
   name: string
   description?: string
   category?: string
-  category_id?: number
   quantity: number
   unit: string
   cost_per_unit: number
@@ -49,7 +45,6 @@ export interface RawMaterial {
   reorder_level?: number
   sku?: string
   status: "in-stock" | "low-stock" | "out-of-stock"
-  status_id?: number
   created_at: string
   updated_at: string
 }
@@ -57,7 +52,6 @@ export interface RawMaterial {
 export interface FixedPrice {
   id: number
   item_type: "raw_material" | "product"
-  item_type_id?: number
   category: string
   item_name: string
   price: number
@@ -71,36 +65,6 @@ export interface Activity {
   user_id?: string
   action: string
   description: string
-  created_at: string
-}
-
-// New normalized table types
-export interface ProductCategory {
-  id: number
-  name: string
-  description?: string
-  created_at: string
-}
-
-export interface RawMaterialCategory {
-  id: number
-  name: string
-  description?: string
-  created_at: string
-}
-
-export interface ItemStatus {
-  id: number
-  status_code: string
-  display_name: string
-  description?: string
-  created_at: string
-}
-
-export interface PriceItemType {
-  id: number
-  type_code: string
-  display_name: string
   created_at: string
 }
 
@@ -294,52 +258,6 @@ export async function authenticateUser(username: string, password: string): Prom
   }
 }
 
-// Database operations for lookup tables
-export async function getProductCategories(): Promise<ProductCategory[]> {
-  try {
-    const { data, error } = await supabase!.from("product_categories").select("*").order("name", { ascending: true })
-    if (error) {
-      console.error("Error fetching product categories:", error)
-      return []
-    }
-    return data || []
-  } catch (error: any) {
-    console.error("Unexpected error fetching product categories:", error)
-    return []
-  }
-}
-
-export async function getRawMaterialCategories(): Promise<RawMaterialCategory[]> {
-  try {
-    const { data, error } = await supabase!
-      .from("raw_material_categories")
-      .select("*")
-      .order("name", { ascending: true })
-    if (error) {
-      console.error("Error fetching raw material categories:", error)
-      return []
-    }
-    return data || []
-  } catch (error: any) {
-    console.error("Unexpected error fetching raw material categories:", error)
-    return []
-  }
-}
-
-export async function getItemStatuses(): Promise<ItemStatus[]> {
-  try {
-    const { data, error } = await supabase!.from("item_statuses").select("*").order("status_code", { ascending: true })
-    if (error) {
-      console.error("Error fetching item statuses:", error)
-      return []
-    }
-    return data || []
-  } catch (error: any) {
-    console.error("Unexpected error fetching item statuses:", error)
-    return []
-  }
-}
-
 // Database operations for fixed prices
 export async function getFixedPrices(itemType: "raw_material" | "product", category?: string): Promise<FixedPrice[]> {
   try {
@@ -367,19 +285,7 @@ export async function addFixedPrice(
   priceData: Omit<FixedPrice, "id" | "created_at" | "updated_at">,
 ): Promise<FixedPrice | null> {
   try {
-    // Get the item_type_id for the foreign key
-    const { data: itemTypeData } = await supabase!
-      .from("price_item_types")
-      .select("id")
-      .eq("type_code", priceData.item_type)
-      .single()
-
-    const insertData = {
-      ...priceData,
-      item_type_id: itemTypeData?.id || null,
-    }
-
-    const { data, error } = await supabase!.from("fixed_prices").insert(insertData).select().single()
+    const { data, error } = await supabase!.from("fixed_prices").insert(priceData).select().single()
 
     if (error) {
       console.error("Error adding fixed price:", error)
@@ -396,19 +302,7 @@ export async function addFixedPrice(
 
 export async function updateFixedPrice(id: number, updates: Partial<FixedPrice>): Promise<FixedPrice | null> {
   try {
-    const updateData = { ...updates }
-
-    // Update item_type_id if item_type is being updated
-    if (updates.item_type) {
-      const { data: itemTypeData } = await supabase!
-        .from("price_item_types")
-        .select("id")
-        .eq("type_code", updates.item_type)
-        .single()
-      updateData.item_type_id = itemTypeData?.id || null
-    }
-
-    const { data, error } = await supabase!.from("fixed_prices").update(updateData).eq("id", id).select().single()
+    const { data, error } = await supabase!.from("fixed_prices").update(updates).eq("id", id).select().single()
 
     if (error) {
       console.error("Error updating fixed price:", error)
@@ -462,19 +356,7 @@ export async function getInventoryItems(): Promise<InventoryItem[]> {
 }
 
 export async function addInventoryItem(
-  item: Omit<
-    InventoryItem,
-    | "id"
-    | "created_at"
-    | "updated_at"
-    | "sku"
-    | "status"
-    | "description"
-    | "image_url"
-    | "category_id"
-    | "status_id"
-    | "reorder_level"
-  >,
+  item: Omit<InventoryItem, "id" | "created_at" | "updated_at" | "sku" | "status" | "description" | "image_url">,
 ): Promise<InventoryItem | null> {
   try {
     const { data: existingItems } = await supabase!
@@ -498,13 +380,7 @@ export async function addInventoryItem(
     if (item.stock === 0) status = "out-of-stock"
     else if (item.stock <= 20) status = "low-stock"
 
-    const newItem = {
-      ...item,
-      sku,
-      status,
-      price: item.price || 0,
-      reorder_level: 20,
-    }
+    const newItem = { ...item, sku, status, price: item.price || 0 }
 
     const { data, error } = await supabase!.from("inventory_items").insert(newItem).select().single()
 
@@ -523,9 +399,8 @@ export async function addInventoryItem(
 export async function updateInventoryItem(id: number, updates: Partial<InventoryItem>): Promise<InventoryItem | null> {
   try {
     if (updates.stock !== undefined) {
-      const reorderLevel = updates.reorder_level || 20
       if (updates.stock === 0) updates.status = "out-of-stock"
-      else if (updates.stock <= reorderLevel) updates.status = "low-stock"
+      else if (updates.stock <= 20) updates.status = "low-stock"
       else updates.status = "in-stock"
     }
 
@@ -580,7 +455,6 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
         name: item.name,
         description: item.description,
         category: item.category || "general",
-        category_id: item.category_id,
         quantity: item.quantity || 0,
         unit: item.unit || (item.category === "Fabric" ? "rolls" : "pcs"),
         cost_per_unit: item.cost_per_unit || 0,
@@ -588,7 +462,6 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
         reorder_level: item.reorder_level || 20,
         sku: item.sku || `RAW-${item.id.toString().padStart(4, "0")}`,
         status: item.status || (item.quantity > 20 ? "in-stock" : item.quantity > 0 ? "low-stock" : "out-of-stock"),
-        status_id: item.status_id,
         created_at: item.created_at,
         updated_at: item.updated_at,
       })) || []
@@ -603,17 +476,7 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
 export async function addRawMaterial(
   material: Omit<
     RawMaterial,
-    | "id"
-    | "created_at"
-    | "updated_at"
-    | "sku"
-    | "status"
-    | "description"
-    | "supplier"
-    | "unit"
-    | "reorder_level"
-    | "category_id"
-    | "status_id"
+    "id" | "created_at" | "updated_at" | "sku" | "status" | "description" | "supplier" | "unit" | "reorder_level"
   > & { quantity: number; category: string; name: string; cost_per_unit: number },
 ): Promise<RawMaterial | null> {
   try {
