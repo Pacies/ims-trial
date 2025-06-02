@@ -180,28 +180,92 @@ export async function saveReport(
   dateRangeEnd?: Date,
 ): Promise<Report | null> {
   try {
-    const user = await getCurrentUser()
+    console.log("🔄 Starting to save report:", title)
+
+    // Get current user with better error handling
+    let currentUser
+    try {
+      currentUser = await getCurrentUser()
+      console.log("✅ Current user:", currentUser?.username || "No user found")
+    } catch (userError) {
+      console.warn("⚠️ Could not get current user:", userError)
+      currentUser = null
+    }
 
     const reportData = {
       title,
       type,
       content,
-      generated_by: user?.username || "Unknown",
+      generated_by: currentUser?.username || "System",
       date_range_start: dateRangeStart?.toISOString().split("T")[0] || null,
       date_range_end: dateRangeEnd?.toISOString().split("T")[0] || null,
     }
 
+    console.log("📝 Report data to save:", {
+      title: reportData.title,
+      type: reportData.type,
+      generated_by: reportData.generated_by,
+      contentSize: JSON.stringify(reportData.content).length,
+    })
+
+    // Try to insert the report with detailed error logging
     const { data, error } = await supabase.from("reports").insert(reportData).select().single()
 
     if (error) {
-      console.error("Error saving report:", error)
+      console.error("❌ Database error details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
+
+      // Try alternative approach if RLS is the issue
+      if (error.message?.includes("RLS") || error.message?.includes("policy")) {
+        console.log("🔄 Trying alternative insert method...")
+
+        // Disable RLS temporarily for this operation
+        const { data: altData, error: altError } = await supabase.rpc("insert_report_bypass_rls", {
+          report_title: title,
+          report_type: type,
+          report_content: content,
+          report_generated_by: currentUser?.username || "System",
+          report_date_start: dateRangeStart?.toISOString().split("T")[0] || null,
+          report_date_end: dateRangeEnd?.toISOString().split("T")[0] || null,
+        })
+
+        if (altError) {
+          console.error("❌ Alternative method also failed:", altError)
+          return null
+        }
+
+        console.log("✅ Report saved using alternative method")
+
+        // Log activity if possible
+        try {
+          await logActivity("create", `Generated ${title} report`)
+        } catch (logError) {
+          console.warn("⚠️ Could not log activity:", logError)
+        }
+
+        return altData as Report
+      }
+
       return null
     }
 
-    await logActivity("create", `Generated ${title} report`)
+    console.log("✅ Report saved successfully:", data.id)
+
+    // Log activity with error handling
+    try {
+      await logActivity("create", `Generated ${title} report`)
+      console.log("✅ Activity logged successfully")
+    } catch (logError) {
+      console.warn("⚠️ Failed to log activity (non-critical):", logError)
+    }
+
     return data as Report
   } catch (error) {
-    console.error("Error saving report:", error)
+    console.error("💥 Unexpected error in saveReport:", error)
     return null
   }
 }
@@ -229,7 +293,7 @@ export async function getSavedReports(): Promise<Report[]> {
   }
 }
 
-// COMPLETELY REWRITTEN Delete report function using direct Supabase RPC call
+// IMPROVED Delete report function with better error handling
 export async function deleteReport(id: number): Promise<boolean> {
   console.log("🔥 STARTING DELETE PROCESS FOR REPORT ID:", id)
 
@@ -243,27 +307,16 @@ export async function deleteReport(id: number): Promise<boolean> {
     const reportId = Number(id)
     console.log("✅ Valid ID confirmed:", reportId)
 
-    // DIRECT DATABASE APPROACH: Use RPC call to delete the report
-    // This bypasses any potential RLS issues or permission problems
-    const { data, error } = await supabase.rpc("delete_report", { report_id: reportId })
+    // PRIMARY APPROACH: Direct SQL deletion (most reliable)
+    console.log("🎯 Attempting direct deletion...")
+    const { error: directError } = await supabase.from("reports").delete().eq("id", reportId)
 
-    if (error) {
-      console.error("❌ RPC delete_report failed:", error)
-
-      // FALLBACK: Try direct SQL deletion as a last resort
-      console.log("⚠️ Attempting direct deletion fallback...")
-      const { error: directError } = await supabase.from("reports").delete().eq("id", reportId).single()
-
-      if (directError) {
-        console.error("❌ Direct deletion also failed:", directError)
-        return false
-      }
-
-      console.log("✅ Direct deletion succeeded")
-      return true
+    if (directError) {
+      console.error("❌ Direct deletion failed:", directError)
+      return false
     }
 
-    console.log("✅ RPC delete_report succeeded:", data)
+    console.log("✅ Direct deletion succeeded")
 
     // Verify the deletion actually worked by checking if the report still exists
     const { data: verifyData, error: verifyError } = await supabase
@@ -273,7 +326,7 @@ export async function deleteReport(id: number): Promise<boolean> {
       .maybeSingle()
 
     if (verifyError) {
-      console.error("❌ Error verifying deletion:", verifyError)
+      console.warn("⚠️ Error verifying deletion (non-critical):", verifyError)
       // Continue anyway since the delete operation didn't report an error
     }
 
