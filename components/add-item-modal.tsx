@@ -315,12 +315,13 @@ export default function AddItemModal({ onItemAdded, onItemUpdated }: AddItemModa
               <p className="text-sm text-muted-foreground">
                 Selected: <span className="font-medium">{selectedProduct}</span>
               </p>
+              <Label className="text-sm">Quantity (dz)</Label>
               <Input
                 type="number"
                 min="0"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                placeholder="Enter quantity"
+                placeholder="Enter quantity in dz"
               />
             </div>
             <div className="flex justify-end space-x-2 pt-4">
@@ -437,7 +438,7 @@ export default function AddItemModal({ onItemAdded, onItemUpdated }: AddItemModa
                     {(getCurrentPrice() * Number.parseFloat(quantity || "0")).toFixed(2)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    ₱{getCurrentPrice().toFixed(2)} × {quantity} units
+                    ₱{getCurrentPrice().toFixed(2)} × {quantity} dz
                   </p>
                 </div>
               )}

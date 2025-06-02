@@ -24,6 +24,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
     quantity: "",
     category: "",
     cost_per_unit: "",
+    unit: "",
   })
   const { toast } = useToast()
 
@@ -34,6 +35,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
         quantity: material.quantity.toString(),
         category: material.category || "",
         cost_per_unit: material.cost_per_unit?.toString() || "0",
+        unit: material.unit || "pcs",
       })
     }
   }, [material])
@@ -48,6 +50,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
         quantity: Number.parseFloat(formData.quantity),
         category: formData.category,
         cost_per_unit: Number.parseFloat(formData.cost_per_unit),
+        unit: formData.unit,
       }
 
       const updatedMaterial = await updateRawMaterial(material.id, updatedData)
@@ -142,6 +145,19 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
               placeholder="0.00"
               required
             />
+          </div>
+
+          <div>
+            <Label htmlFor="unit">Unit *</Label>
+            <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select unit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rolls">Rolls</SelectItem>
+                <SelectItem value="pcs">Pieces</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

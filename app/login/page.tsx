@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { authenticateUser, testDatabaseConnection, fallbackAuthentication } from "@/lib/database"
+import { authenticateUser, testDatabaseConnection } from "@/lib/database"
 
 export default function LoginPage() {
   const [username, setUsername] = useState("")
@@ -17,7 +17,6 @@ export default function LoginPage() {
   const [userType, setUserType] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [useFallback, setUseFallback] = useState(false)
   const router = useRouter()
 
   // Test database connection on component mount
@@ -37,24 +36,8 @@ export default function LoginPage() {
     try {
       console.log("Login attempt:", { username, userType })
 
-      let user = null
-
-      // Try database authentication first
-      if (!useFallback) {
-        user = await authenticateUser(username, password)
-
-        // If database auth fails, offer fallback
-        if (!user) {
-          console.log("Database authentication failed, offering fallback...")
-          setUseFallback(true)
-          setError("Database connection failed. Click 'Use Fallback Login' to continue with demo mode.")
-          setIsLoading(false)
-          return
-        }
-      } else {
-        // Use fallback authentication
-        user = await fallbackAuthentication(username, password, userType)
-      }
+      // Only use database authentication
+      const user = await authenticateUser(username, password)
 
       if (user) {
         console.log("Authentication successful:", user)
@@ -85,7 +68,7 @@ export default function LoginPage() {
         // Log activity
         const activity = {
           type: "login",
-          details: `User ${user.username} logged in as ${user.user_type}${useFallback ? " (fallback mode)" : ""}`,
+          details: `User ${user.username} logged in as ${user.user_type}`,
           timestamp: new Date().toISOString(),
           user: user.username,
         }
@@ -115,12 +98,6 @@ export default function LoginPage() {
     }
   }
 
-  const handleFallbackLogin = () => {
-    setUseFallback(true)
-    setError("")
-    console.log("Switched to fallback authentication mode")
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-white/95 backdrop-blur-xl border-0 shadow-2xl">
@@ -130,11 +107,6 @@ export default function LoginPage() {
           </div>
           <h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome Back</h1>
           <p className="text-slate-600">Sign in to your account</p>
-          {useFallback && (
-            <div className="bg-yellow-50 text-yellow-800 p-2 rounded text-sm mt-2">
-              Running in demo mode (fallback authentication)
-            </div>
-          )}
         </CardHeader>
 
         <CardContent>
@@ -180,21 +152,13 @@ export default function LoginPage() {
 
             {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">{error}</div>}
 
-            <div className="space-y-3">
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-              >
-                {isLoading ? "Signing In..." : "Sign In"}
-              </Button>
-
-              {!useFallback && error.includes("Database connection failed") && (
-                <Button type="button" variant="outline" onClick={handleFallbackLogin} className="w-full h-12">
-                  Use Fallback Login (Demo Mode)
-                </Button>
-              )}
-            </div>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            >
+              {isLoading ? "Signing In..." : "Sign In"}
+            </Button>
           </form>
         </CardContent>
       </Card>

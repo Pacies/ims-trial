@@ -7,18 +7,24 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Edit, Trash2, Package, RefreshCw } from "lucide-react"
-import { getInventoryItems, deleteInventoryItem, updateInventoryItem, type InventoryItem } from "@/lib/database"
+import { Search, Edit, Trash2, RefreshCw } from "lucide-react"
+import {
+  getInventoryItems,
+  deleteInventoryItem,
+  updateInventoryItem,
+  type InventoryItem,
+  isAdmin,
+} from "@/lib/database"
 import { useToast } from "@/hooks/use-toast"
 import AddItemModal from "@/components/add-item-modal"
 import EditItemModal from "@/components/edit-item-modal"
 import PageHeader from "@/components/page-header"
 import MainLayout from "@/components/main-layout"
-import dynamic from "next/dynamic";
+import dynamic from "next/dynamic"
 import ItemQRCode from "@/components/ui/item-qr-code"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false });
+const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false })
 
 export default function ProductInventoryPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -28,11 +34,12 @@ export default function ProductInventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrProduct, setQRProduct] = useState<InventoryItem | null>(null);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
+  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false)
+  const [showQRModal, setShowQRModal] = useState(false)
+  const [qrProduct, setQRProduct] = useState<InventoryItem | null>(null)
   const { toast } = useToast()
+  const [isUserAdmin, setIsUserAdmin] = useState(false)
 
   const loadInventoryItems = useCallback(async () => {
     setIsLoading(true)
@@ -55,7 +62,29 @@ export default function ProductInventoryPage() {
     loadInventoryItems()
   }, [loadInventoryItems])
 
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const adminStatus = await isAdmin()
+      setIsUserAdmin(adminStatus)
+    }
+    checkAdminStatus()
+  }, [])
+
   const categories = [...new Set(inventoryItems.map((item) => item.category))]
+
+  // Helper function to get status priority for sorting
+  const getStatusPriority = (status: string): number => {
+    switch (status) {
+      case "out-of-stock":
+        return 1 // Highest priority
+      case "low-stock":
+        return 2
+      case "in-stock":
+        return 3
+      default:
+        return 4
+    }
+  }
 
   useEffect(() => {
     let filtered = inventoryItems
@@ -77,6 +106,11 @@ export default function ProductInventoryPage() {
       filtered = filtered.filter((item) => item.status === statusFilter)
     }
 
+    // Sort by status priority (out-of-stock first, then low-stock, then in-stock)
+    filtered = [...filtered].sort((a, b) => {
+      return getStatusPriority(a.status) - getStatusPriority(b.status)
+    })
+
     setFilteredItems(filtered)
   }, [inventoryItems, searchTerm, categoryFilter, statusFilter])
 
@@ -92,6 +126,7 @@ export default function ProductInventoryPage() {
   const handleItemUpdated = async (updatedItem: InventoryItem) => {
     // Reload data from database to ensure consistency
     await loadInventoryItems()
+    setEditingItem(null) // Close the modal
     toast({
       title: "Success",
       description: "Product updated and data refreshed.",
@@ -136,49 +171,57 @@ export default function ProductInventoryPage() {
   }
 
   const handleBarcodeScanned = async (result: { text: string; format: string } | null) => {
-    if (!result || isProcessingBarcode) return;
-    setIsProcessingBarcode(true);
+    if (!result || isProcessingBarcode) return
+    setIsProcessingBarcode(true)
     try {
-      let barcode = result.text;
-      let type = result.format;
-      let parsed: any = null;
+      const barcode = result.text
+      const type = result.format
+      let parsed: any = null
       try {
-        parsed = JSON.parse(barcode);
+        parsed = JSON.parse(barcode)
       } catch (e) {}
       if (parsed && parsed.type === "item_update" && parsed.itemId) {
-        const product = inventoryItems.find(item => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId);
+        const product = inventoryItems.find(
+          (item) => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId,
+        )
         if (product) {
-          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 });
+          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
           if (updatedItem) {
-            toast({ title: 'Stock Incremented', description: `Stock for ${product.name} incremented to ${updatedItem.stock}` });
-            await loadInventoryItems();
+            toast({
+              title: "Stock Incremented",
+              description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
+            })
+            await loadInventoryItems()
           } else {
-            toast({ title: 'Error', description: 'Failed to update product stock.', variant: 'destructive' });
+            toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
           }
         } else {
-          window.alert('QR code does not match any product.');
+          window.alert("QR code does not match any product.")
         }
       } else {
-        const product = inventoryItems.find(item => item.sku === barcode);
+        const product = inventoryItems.find((item) => item.sku === barcode)
         if (product) {
-          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 });
+          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
           if (updatedItem) {
-            toast({ title: 'Stock Incremented', description: `Stock for ${product.name} incremented to ${updatedItem.stock}` });
-            await loadInventoryItems();
+            toast({
+              title: "Stock Incremented",
+              description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
+            })
+            await loadInventoryItems()
           } else {
-            toast({ title: 'Error', description: 'Failed to update product stock.', variant: 'destructive' });
+            toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
           }
         } else {
-          window.alert('Product Not Found. Would you like to add this product?');
+          window.alert("Product Not Found. Would you like to add this product?")
         }
       }
-      setShowBarcodeScanner(false);
+      setShowBarcodeScanner(false)
     } catch (error) {
-      window.alert('Error: Failed to process barcode scan');
+      window.alert("Error: Failed to process barcode scan")
     } finally {
-      setIsProcessingBarcode(false);
+      setIsProcessingBarcode(false)
     }
-  };
+  }
 
   if (isLoading && inventoryItems.length === 0) {
     return (
@@ -293,7 +336,7 @@ export default function ProductInventoryPage() {
                           </div>
                         </TableCell>
                         <TableCell>{item.category}</TableCell>
-                        <TableCell className="pr-8">{item.stock}</TableCell>
+                        <TableCell className="pr-8">{item.stock} dz</TableCell>
                         <TableCell className="pr-8">₱{item.price.toFixed(2)}</TableCell>
                         <TableCell className="pl-6">{getStatusBadge(item.status)}</TableCell>
                         <TableCell className="text-right">
@@ -301,18 +344,23 @@ export default function ProductInventoryPage() {
                             <Button variant="ghost" size="sm" onClick={() => setEditingItem(item)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-600"
-                              onClick={() => handleDelete(item.id, item.name)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isUserAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-600"
+                                onClick={() => handleDelete(item.id, item.name)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => { setQRProduct(item); setShowQRModal(true); }}
+                              onClick={() => {
+                                setQRProduct(item)
+                                setShowQRModal(true)
+                              }}
                               title="Show QR Code"
                             >
                               Show QR
@@ -340,7 +388,7 @@ export default function ProductInventoryPage() {
 
         {/* Edit Modal */}
         {editingItem && (
-          <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} onItemUpdated={() => {}} />
+          <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} onItemUpdated={handleItemUpdated} />
         )}
 
         {/* QR Code Scanner Dialog */}
@@ -356,8 +404,8 @@ export default function ProductInventoryPage() {
                 onUpdate={(err, result) => {
                   if (result) {
                     // @ts-ignore
-                    const text = result.getText ? result.getText() : result.text;
-                    handleBarcodeScanned({ text, format: "qr" });
+                    const text = result.getText ? result.getText() : result.text
+                    handleBarcodeScanned({ text, format: "qr" })
                   }
                 }}
                 // @ts-ignore
@@ -379,6 +427,9 @@ export default function ProductInventoryPage() {
         {/* QR Code Modal */}
         <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
           <DialogContent className="max-w-xs flex justify-center items-center p-4">
+            <DialogHeader>
+              <DialogTitle>QR Code</DialogTitle>
+            </DialogHeader>
             {qrProduct && <ItemQRCode itemId={qrProduct.id.toString()} itemName={qrProduct.name} />}
           </DialogContent>
         </Dialog>

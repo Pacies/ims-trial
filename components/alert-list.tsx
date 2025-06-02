@@ -16,7 +16,7 @@ export default function AlertList({ lowStockProducts = [], lowStockRawMaterials 
       id: `low-stock-product-${item.id}`,
       type: "warning" as const,
       title: "Low Stock Alert - Product",
-      message: `${item.name} is running low (${item.stock} remaining)`,
+      message: `${item.name} is running low (${item.stock} dz remaining)`,
       time: "Now",
       icon: <Package className="h-4 w-4" />,
     })),

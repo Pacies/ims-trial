@@ -1,23 +1,23 @@
 "use client"
 import { motion } from "framer-motion"
-import { FileText, Download, Package, AlertTriangle, TrendingUp, Eye, Trash2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogTrigger,
+  AlertDialogContent,
+} from "@/components/ui/alert-dialog"
+
+import { FileText, Download, Package, AlertTriangle, Eye, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import type { InventorySummaryData, LowStockData, StockMovementData, Report } from "@/lib/reports-utils"
+import type { InventorySummaryData, LowStockData, Report } from "@/lib/reports-utils"
 
 interface ReportPreviewProps {
   report: Report | null
@@ -142,6 +142,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Stock</TableHead>
+                <TableHead>Unit</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Value</TableHead>
                 <TableHead>Status</TableHead>
@@ -154,6 +155,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.category}</TableCell>
                   <TableCell>{item.stock}</TableCell>
+                  <TableCell>{item.unit}</TableCell>
                   <TableCell>₱{item.price.toLocaleString()}</TableCell>
                   <TableCell>₱{item.value.toLocaleString()}</TableCell>
                   <TableCell>
@@ -193,6 +195,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Quantity</TableHead>
+                <TableHead>Unit</TableHead>
                 <TableHead>Cost/Unit</TableHead>
                 <TableHead>Value</TableHead>
                 <TableHead>Status</TableHead>
@@ -205,6 +208,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.category}</TableCell>
                   <TableCell>{item.quantity}</TableCell>
+                  <TableCell>{item.unit}</TableCell>
                   <TableCell>₱{item.cost_per_unit.toLocaleString()}</TableCell>
                   <TableCell>₱{item.value.toLocaleString()}</TableCell>
                   <TableCell>
@@ -278,6 +282,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Current Stock</TableHead>
+                  <TableHead>Unit</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Reorder Needed</TableHead>
                 </TableRow>
@@ -289,6 +294,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.current_stock}</TableCell>
+                    <TableCell>{item.unit}</TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"
@@ -325,6 +331,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Current Quantity</TableHead>
+                  <TableHead>Unit</TableHead>
                   <TableHead>Reorder Level</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Reorder Needed</TableHead>
@@ -337,6 +344,7 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.current_quantity}</TableCell>
+                    <TableCell>{item.unit}</TableCell>
                     <TableCell>{item.reorder_level}</TableCell>
                     <TableCell>
                       <Badge
@@ -359,99 +367,12 @@ export default function ReportPreview({ report, onExportPDF, onClose, onDelete }
     </div>
   )
 
-  const renderStockMovement = (data: StockMovementData) => {
-    const productsChartData = data.products.labels.map((label, index) => ({
-      period: label,
-      value: data.products.data[index],
-    }))
-
-    const rawMaterialsChartData = data.raw_materials.labels.map((label, index) => ({
-      period: label,
-      value: data.raw_materials.data[index],
-    }))
-
-    return (
-      <div className="space-y-6">
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-8 w-8 text-blue-500" />
-                <div>
-                  <p className="text-2xl font-bold">{data.products.total_movement}</p>
-                  <p className="text-sm text-gray-600">Products Movement</p>
-                  <p className="text-xs text-gray-500">{data.products.date_range}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-8 w-8 text-purple-500" />
-                <div>
-                  <p className="text-2xl font-bold">{data.raw_materials.total_movement}</p>
-                  <p className="text-sm text-gray-600">Raw Materials Movement</p>
-                  <p className="text-xs text-gray-500">{data.raw_materials.date_range}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Individual Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Products Movement</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={productsChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#3b82f6" name="Units" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Raw Materials Movement</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rawMaterialsChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#8b5cf6" name="Units" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
   const renderReportContent = () => {
     switch (report.type) {
       case "inventory-summary":
         return renderInventorySummary(report.content as InventorySummaryData)
       case "low-stock":
         return renderLowStockReport(report.content as LowStockData)
-      case "stock-movement":
-        return renderStockMovement(report.content as StockMovementData)
       default:
         return <div>Unknown report type</div>
     }
