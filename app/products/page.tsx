@@ -426,11 +426,13 @@ export default function ProductInventoryPage() {
 
         {/* QR Code Modal */}
         <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
-          <DialogContent className="max-w-xs flex justify-center items-center p-4">
+          <DialogContent className="max-w-xs flex flex-col items-center justify-center">
             <DialogHeader>
               <DialogTitle>QR Code</DialogTitle>
             </DialogHeader>
-            {qrProduct && <ItemQRCode itemId={qrProduct.id.toString()} itemName={qrProduct.name} />}
+            <div className="flex flex-col items-center justify-center w-full h-full">
+              {qrProduct && <ItemQRCode itemId={qrProduct.id.toString()} itemName={qrProduct.name} />}
+            </div>
           </DialogContent>
         </Dialog>
       </div>
