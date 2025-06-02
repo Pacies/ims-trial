@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 interface EditItemModalProps {
   item: InventoryItem
   onClose: () => void
-  onItemUpdated: () => void
+  onItemUpdated: (updatedItem: InventoryItem) => void
 }
 
 export default function EditItemModal({ item, onClose, onItemUpdated }: EditItemModalProps) {
@@ -56,7 +56,13 @@ export default function EditItemModal({ item, onClose, onItemUpdated }: EditItem
           description: `${formData.name} has been updated.`,
         })
         onClose()
-        onItemUpdated()
+        onItemUpdated({
+          ...item,
+          name: formData.name,
+          category: formData.category,
+          price: Number.parseFloat(formData.price),
+          stock: Number.parseInt(formData.stock),
+        })
       } else {
         toast({
           title: "Error",

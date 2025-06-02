@@ -431,7 +431,7 @@ export default function ProductInventoryPage() {
               <DialogTitle>QR Code</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col items-center justify-center w-full h-full">
-              {qrProduct && <ItemQRCode itemId={qrProduct.id.toString()} itemName={qrProduct.name} />}
+              {qrProduct && <ItemQRCode itemId={qrProduct.id.toString()} itemName={qrProduct.name} type="item_update" />}
             </div>
           </DialogContent>
         </Dialog>
