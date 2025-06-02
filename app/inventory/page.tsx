@@ -7,18 +7,18 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Edit, Trash2, Package, RefreshCw } from "lucide-react"
-import { getRawMaterials, deleteRawMaterial, updateRawMaterial, type RawMaterial } from "@/lib/database"
+import { Search, Edit, Trash2, RefreshCw } from "lucide-react"
+import { getRawMaterials, deleteRawMaterial, updateRawMaterial, type RawMaterial, isAdmin } from "@/lib/database"
 import { useToast } from "@/hooks/use-toast"
 import AddRawItemModal from "@/components/add-raw-item-modal"
 import EditRawItemModal from "@/components/edit-raw-item-modal"
 import PageHeader from "@/components/page-header"
 import MainLayout from "@/components/main-layout"
-import dynamic from "next/dynamic";
+import dynamic from "next/dynamic"
 import ItemQRCode from "@/components/ui/item-qr-code"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false });
+const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false })
 
 export default function RawMaterialInventoryPage() {
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([])
@@ -28,11 +28,12 @@ export default function RawMaterialInventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [editingItem, setEditingItem] = useState<RawMaterial | null>(null)
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrMaterial, setQRMaterial] = useState<RawMaterial | null>(null);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
+  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false)
+  const [showQRModal, setShowQRModal] = useState(false)
+  const [qrMaterial, setQRMaterial] = useState<RawMaterial | null>(null)
   const { toast } = useToast()
+  const [isUserAdmin, setIsUserAdmin] = useState(false)
 
   const loadRawMaterials = useCallback(async () => {
     setIsLoading(true)
@@ -55,7 +56,29 @@ export default function RawMaterialInventoryPage() {
     loadRawMaterials()
   }, [loadRawMaterials])
 
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const adminStatus = await isAdmin()
+      setIsUserAdmin(adminStatus)
+    }
+    checkAdminStatus()
+  }, [])
+
   const categories = [...new Set(rawMaterials.map((item) => item.category))]
+
+  // Helper function to get status priority for sorting
+  const getStatusPriority = (status: string): number => {
+    switch (status) {
+      case "out-of-stock":
+        return 1 // Highest priority
+      case "low-stock":
+        return 2
+      case "in-stock":
+        return 3
+      default:
+        return 4
+    }
+  }
 
   useEffect(() => {
     let filtered = rawMaterials
@@ -76,6 +99,11 @@ export default function RawMaterialInventoryPage() {
     if (statusFilter !== "all") {
       filtered = filtered.filter((item) => item.status === statusFilter)
     }
+
+    // Sort by status priority (out-of-stock first, then low-stock, then in-stock)
+    filtered = [...filtered].sort((a, b) => {
+      return getStatusPriority(a.status) - getStatusPriority(b.status)
+    })
 
     setFilteredMaterials(filtered)
   }, [rawMaterials, searchTerm, categoryFilter, statusFilter])
@@ -100,7 +128,11 @@ export default function RawMaterialInventoryPage() {
         await loadRawMaterials()
         toast({ title: "Raw material deleted", description: `${name} has been removed and data refreshed.` })
       } else {
-        toast({ title: "Error", description: "Failed to delete raw material. Please try again.", variant: "destructive" })
+        toast({
+          title: "Error",
+          description: "Failed to delete raw material. Please try again.",
+          variant: "destructive",
+        })
       }
     }
   }
@@ -123,49 +155,57 @@ export default function RawMaterialInventoryPage() {
   }
 
   const handleBarcodeScanned = async (result: { text: string; format: string } | null) => {
-    if (!result || isProcessingBarcode) return;
-    setIsProcessingBarcode(true);
+    if (!result || isProcessingBarcode) return
+    setIsProcessingBarcode(true)
     try {
-      let barcode = result.text;
-      let type = result.format;
-      let parsed: any = null;
+      const barcode = result.text
+      const type = result.format
+      let parsed: any = null
       try {
-        parsed = JSON.parse(barcode);
+        parsed = JSON.parse(barcode)
       } catch (e) {}
       if (parsed && parsed.type === "raw_material_update" && parsed.itemId) {
-        const material = rawMaterials.find(item => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId);
+        const material = rawMaterials.find(
+          (item) => item.id.toString() === parsed.itemId.toString() || item.sku === parsed.itemId,
+        )
         if (material) {
-          const updatedMaterial = await updateRawMaterial(material.id, { quantity: material.quantity + 1 });
+          const updatedMaterial = await updateRawMaterial(material.id, { quantity: material.quantity + 1 })
           if (updatedMaterial) {
-            toast({ title: 'Quantity Incremented', description: `Quantity for ${material.name} incremented to ${updatedMaterial.quantity}` });
-            await loadRawMaterials();
+            toast({
+              title: "Quantity Incremented",
+              description: `Quantity for ${material.name} incremented to ${updatedMaterial.quantity}`,
+            })
+            await loadRawMaterials()
           } else {
-            toast({ title: 'Error', description: 'Failed to update material quantity.', variant: 'destructive' });
+            toast({ title: "Error", description: "Failed to update material quantity.", variant: "destructive" })
           }
         } else {
-          window.alert('QR code does not match any raw material.');
+          window.alert("QR code does not match any raw material.")
         }
       } else {
-        const material = rawMaterials.find(item => item.sku === barcode);
+        const material = rawMaterials.find((item) => item.sku === barcode)
         if (material) {
-          const updatedMaterial = await updateRawMaterial(material.id, { quantity: material.quantity + 1 });
+          const updatedMaterial = await updateRawMaterial(material.id, { quantity: material.quantity + 1 })
           if (updatedMaterial) {
-            toast({ title: 'Quantity Incremented', description: `Quantity for ${material.name} incremented to ${updatedMaterial.quantity}` });
-            await loadRawMaterials();
+            toast({
+              title: "Quantity Incremented",
+              description: `Quantity for ${material.name} incremented to ${updatedMaterial.quantity}`,
+            })
+            await loadRawMaterials()
           } else {
-            toast({ title: 'Error', description: 'Failed to update material quantity.', variant: 'destructive' });
+            toast({ title: "Error", description: "Failed to update material quantity.", variant: "destructive" })
           }
         } else {
-          window.alert('Raw Material Not Found. Would you like to add this material?');
+          window.alert("Raw Material Not Found. Would you like to add this material?")
         }
       }
-      setShowBarcodeScanner(false);
+      setShowBarcodeScanner(false)
     } catch (error) {
-      window.alert('Error: Failed to process barcode scan');
+      window.alert("Error: Failed to process barcode scan")
     } finally {
-      setIsProcessingBarcode(false);
+      setIsProcessingBarcode(false)
     }
-  };
+  }
 
   if (isLoading && rawMaterials.length === 0) {
     return (
@@ -218,13 +258,14 @@ export default function RawMaterialInventoryPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((category, index) => (
-                    category && (
-                      <SelectItem key={`${category}-${index}`} value={category}>
-                        {category}
-                      </SelectItem>
-                    )
-                  ))}
+                  {categories.map(
+                    (category, index) =>
+                      category && (
+                        <SelectItem key={`${category}-${index}`} value={category}>
+                          {category}
+                        </SelectItem>
+                      ),
+                  )}
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -257,6 +298,7 @@ export default function RawMaterialInventoryPage() {
                     <TableHead>Raw Material</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead className="pr-8">Quantity</TableHead>
+                    <TableHead className="pr-8">Unit</TableHead>
                     <TableHead className="pr-8">Cost/Unit</TableHead>
                     <TableHead className="pl-6">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -265,7 +307,7 @@ export default function RawMaterialInventoryPage() {
                 <TableBody>
                   {filteredMaterials.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         {rawMaterials.length === 0
                           ? "No raw materials found. Add your first material to get started."
                           : "No raw materials match your search criteria."}
@@ -283,6 +325,7 @@ export default function RawMaterialInventoryPage() {
                         </TableCell>
                         <TableCell>{item.category}</TableCell>
                         <TableCell className="pr-8">{item.quantity}</TableCell>
+                        <TableCell className="pr-8">{item.unit}</TableCell>
                         <TableCell className="pr-8">₱{item.cost_per_unit.toFixed(2)}</TableCell>
                         <TableCell className="pl-6">{getStatusBadge(item.status)}</TableCell>
                         <TableCell className="text-right">
@@ -290,18 +333,23 @@ export default function RawMaterialInventoryPage() {
                             <Button variant="ghost" size="sm" onClick={() => setEditingItem(item)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-600"
-                              onClick={() => handleDelete(item.id, item.name)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isUserAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-600"
+                                onClick={() => handleDelete(item.id, item.name)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => { setQRMaterial(item); setShowQRModal(true); }}
+                              onClick={() => {
+                                setQRMaterial(item)
+                                setShowQRModal(true)
+                              }}
                               title="Show QR Code"
                             >
                               Show QR
@@ -310,8 +358,7 @@ export default function RawMaterialInventoryPage() {
                         </TableCell>
                       </TableRow>
                     ))
-                  )
-                  }
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -322,7 +369,8 @@ export default function RawMaterialInventoryPage() {
                 Showing {filteredMaterials.length} of {rawMaterials.length} raw materials
               </p>
               <p>
-                Total value: ₱{rawMaterials.reduce((sum, item) => sum + item.cost_per_unit * item.quantity, 0).toLocaleString()}
+                Total value: ₱
+                {rawMaterials.reduce((sum, item) => sum + item.cost_per_unit * item.quantity, 0).toLocaleString()}
               </p>
             </div>
           </CardContent>
@@ -330,7 +378,11 @@ export default function RawMaterialInventoryPage() {
 
         {/* Edit Modal */}
         {editingItem && (
-          <EditRawItemModal material={editingItem} onClose={() => setEditingItem(null)} onItemUpdated={handleItemUpdated} />
+          <EditRawItemModal
+            material={editingItem}
+            onClose={() => setEditingItem(null)}
+            onItemUpdated={handleItemUpdated}
+          />
         )}
 
         {/* QR Code Scanner Dialog */}
@@ -346,8 +398,8 @@ export default function RawMaterialInventoryPage() {
                 onUpdate={(err, result) => {
                   if (result) {
                     // @ts-ignore
-                    const text = result.getText ? result.getText() : result.text;
-                    handleBarcodeScanned({ text, format: "qr" });
+                    const text = result.getText ? result.getText() : result.text
+                    handleBarcodeScanned({ text, format: "qr" })
                   }
                 }}
                 // @ts-ignore
@@ -369,6 +421,9 @@ export default function RawMaterialInventoryPage() {
         {/* QR Code Modal */}
         <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
           <DialogContent className="max-w-xs flex flex-col items-center justify-center">
+            <DialogHeader>
+              <DialogTitle>QR Code</DialogTitle>
+            </DialogHeader>
             <div className="flex flex-col items-center justify-center w-full h-full">
               {qrMaterial && <ItemQRCode itemId={qrMaterial.id.toString()} itemName={qrMaterial.name} />}
             </div>

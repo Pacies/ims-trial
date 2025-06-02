@@ -338,7 +338,10 @@ export async function deleteFixedPrice(id: number): Promise<boolean> {
 export async function getInventoryItems(): Promise<InventoryItem[]> {
   try {
     console.log("Fetching inventory items...")
-    const { data, error } = await supabase!.from("inventory_items").select("*").order("created_at", { ascending: false })
+    const { data, error } = await supabase!
+      .from("inventory_items")
+      .select("*")
+      .order("created_at", { ascending: false })
 
     if (error) {
       console.error("Error fetching inventory items:", error)
@@ -375,7 +378,7 @@ export async function addInventoryItem(
 
     let status: "in-stock" | "low-stock" | "out-of-stock" = "in-stock"
     if (item.stock === 0) status = "out-of-stock"
-    else if (item.stock <= 10) status = "low-stock"
+    else if (item.stock <= 20) status = "low-stock"
 
     const newItem = { ...item, sku, status, price: item.price || 0 }
 
@@ -397,7 +400,7 @@ export async function updateInventoryItem(id: number, updates: Partial<Inventory
   try {
     if (updates.stock !== undefined) {
       if (updates.stock === 0) updates.status = "out-of-stock"
-      else if (updates.stock <= 10) updates.status = "low-stock"
+      else if (updates.stock <= 20) updates.status = "low-stock"
       else updates.status = "in-stock"
     }
 
@@ -453,12 +456,12 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
         description: item.description,
         category: item.category || "general",
         quantity: item.quantity || 0,
-        unit: item.unit || (item.category === "Fabric" ? "rolls" : "units"),
+        unit: item.unit || (item.category === "Fabric" ? "rolls" : "pcs"),
         cost_per_unit: item.cost_per_unit || 0,
         supplier: item.supplier,
-        reorder_level: item.reorder_level || 10,
+        reorder_level: item.reorder_level || 20,
         sku: item.sku || `RAW-${item.id.toString().padStart(4, "0")}`,
-        status: item.status || (item.quantity > 10 ? "in-stock" : item.quantity > 0 ? "low-stock" : "out-of-stock"),
+        status: item.status || (item.quantity > 20 ? "in-stock" : item.quantity > 0 ? "low-stock" : "out-of-stock"),
         created_at: item.created_at,
         updated_at: item.updated_at,
       })) || []
@@ -494,9 +497,9 @@ export async function addRawMaterial(
     }
     const sku = `RAW-${nextNumber.toString().padStart(4, "0")}`
 
-    // Set unit based on category - fabric uses "rolls", others use "units"
-    const unit = material.category === "Fabric" ? "rolls" : "units"
-    const reorder_level = 10
+    // Set unit based on category - fabric uses "rolls", sewing uses "pcs"
+    const unit = material.category === "Fabric" ? "rolls" : "pcs"
+    const reorder_level = 20
 
     let status: "in-stock" | "low-stock" | "out-of-stock" = "in-stock"
     if (material.quantity === 0) status = "out-of-stock"
@@ -529,7 +532,7 @@ export async function updateRawMaterial(id: number, updates: Partial<RawMaterial
         .single()
       if (currentMaterial) {
         const newQuantity = updates.quantity ?? currentMaterial.quantity
-        const newReorderLevel = updates.reorder_level ?? currentMaterial.reorder_level
+        const newReorderLevel = updates.reorder_level ?? currentMaterial.reorder_level ?? 20
         if (newQuantity === 0) updates.status = "out-of-stock"
         else if (newQuantity <= newReorderLevel) updates.status = "low-stock"
         else updates.status = "in-stock"

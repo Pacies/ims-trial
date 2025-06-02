@@ -114,7 +114,7 @@ export default function EditItemModal({ item, onClose, onItemUpdated }: EditItem
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="stock">Stock Quantity *</Label>
+              <Label htmlFor="stock">Stock Quantity (dz) *</Label>
               <Input
                 id="stock"
                 type="number"

@@ -2,20 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { FileText, Filter, TrendingUp, Package, AlertTriangle, Loader2 } from "lucide-react"
+import { FileText, Package, AlertTriangle, Loader2 } from "lucide-react"
 import MainLayout from "@/components/main-layout"
 import PageHeader from "@/components/page-header"
 import ReportPreview from "@/components/report-preview"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DatePickerWithRange } from "@/components/ui/date-range-picker"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import {
   generateInventorySummary,
   generateLowStockReport,
-  generateStockMovementReport,
   saveReport,
   getSavedReports,
   generatePDFContent,
@@ -23,6 +20,7 @@ import {
   type Report,
 } from "@/lib/reports-utils"
 import { supabase } from "@/lib/supabaseClient"
+import { isAdmin } from "@/lib/database"
 
 export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState("")
@@ -34,6 +32,7 @@ export default function ReportsPage() {
   const [isExporting, setIsExporting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const { toast } = useToast()
+  const [isUserAdmin, setIsUserAdmin] = useState(false)
 
   const reportTypes = [
     {
@@ -50,17 +49,18 @@ export default function ReportsPage() {
       icon: <AlertTriangle className="h-5 w-5" />,
       color: "bg-orange-500",
     },
-    {
-      id: "stock-movement",
-      title: "Stock Movement",
-      description: "Track inventory changes over time",
-      icon: <TrendingUp className="h-5 w-5" />,
-      color: "bg-green-500",
-    },
   ]
 
   useEffect(() => {
     loadSavedReports()
+  }, [])
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const adminStatus = await isAdmin()
+      setIsUserAdmin(adminStatus)
+    }
+    checkAdminStatus()
   }, [])
 
   const loadSavedReports = async () => {
@@ -84,16 +84,6 @@ export default function ReportsPage() {
       return
     }
 
-    // Validate date range for stock movement reports
-    if (selectedReport === "stock-movement" && (!dateRange?.from || !dateRange?.to)) {
-      toast({
-        title: "Error",
-        description: "Please select a date range for stock movement reports",
-        variant: "destructive",
-      })
-      return
-    }
-
     setIsGenerating(true)
     try {
       let reportData: any
@@ -107,10 +97,6 @@ export default function ReportsPage() {
         case "low-stock":
           reportData = await generateLowStockReport()
           reportTitle = "Low Stock Report"
-          break
-        case "stock-movement":
-          reportData = await generateStockMovementReport(dateRange?.from, dateRange?.to)
-          reportTitle = `Stock Movement Report (${dateRange?.from?.toLocaleDateString()} - ${dateRange?.to?.toLocaleDateString()})`
           break
         default:
           throw new Error("Invalid report type")
@@ -281,7 +267,7 @@ export default function ReportsPage() {
             setShowPreview(false)
             setCurrentReport(null)
           }}
-          onDelete={isDeleting ? undefined : handleDeleteReport}
+          onDelete={isUserAdmin && !isDeleting ? handleDeleteReport : undefined}
         />
       </MainLayout>
     )
@@ -291,71 +277,7 @@ export default function ReportsPage() {
     <MainLayout>
       <PageHeader title="Inventory Reports" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Report Configuration */}
-        <motion.div
-          className="lg:col-span-1"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card className="bg-white border-gray-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-gray-800">
-                <Filter className="h-5 w-5" />
-                Report Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Report Type</label>
-                <Select value={selectedReport} onValueChange={setSelectedReport}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select report type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {reportTypes.map((report) => (
-                      <SelectItem key={report.id} value={report.id}>
-                        {report.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Date Range {selectedReport === "stock-movement" && <span className="text-red-500">*</span>}
-                </label>
-                <DatePickerWithRange date={dateRange} setDate={setDateRange} />
-                {selectedReport === "stock-movement" && (
-                  <p className="text-xs text-gray-500 mt-1">Date range is required for stock movement reports</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Button
-                  onClick={handleGenerateReport}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Generate Report
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
+      <div className="grid grid-cols-1 gap-6">
         {/* Report Types */}
         <motion.div
           className="lg:col-span-2"
@@ -367,7 +289,8 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="text-gray-800">Available Reports</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Report Type Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {reportTypes.map((report, index) => (
                   <motion.div
@@ -394,6 +317,30 @@ export default function ReportsPage() {
                     </div>
                   </motion.div>
                 ))}
+              </div>
+
+              {/* Generate Report Button */}
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={handleGenerateReport}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={isGenerating || !selectedReport}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating Report...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Generate Report
+                    </>
+                  )}
+                </Button>
+                {!selectedReport && (
+                  <p className="text-xs text-gray-500 mt-2 text-center">Please select a report type above</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -432,7 +379,6 @@ export default function ReportsPage() {
                     <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
                       {report.type === "inventory-summary" && "inventory"}
                       {report.type === "low-stock" && "low-stock"}
-                      {report.type === "stock-movement" && "movement"}
                     </Badge>
                   </div>
                   <p className="text-xs text-gray-400 truncate">Generated by {report.generated_by}</p>

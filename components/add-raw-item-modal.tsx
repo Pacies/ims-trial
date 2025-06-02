@@ -161,7 +161,7 @@ export default function AddRawItemModal({ onItemAdded, onItemUpdated }: AddRawIt
         if (updatedMaterial) {
           toast({
             title: "Raw material updated",
-            description: `Added ${quantity} to existing ${selectedType}. Total quantity: ${newQuantity}`,
+            description: `Added ${quantity} ${existingMaterial.unit} to existing ${selectedType}. Total quantity: ${newQuantity} ${existingMaterial.unit}`,
           })
           onItemUpdated(updatedMaterial)
         }
@@ -449,7 +449,7 @@ export default function AddRawItemModal({ onItemAdded, onItemUpdated }: AddRawIt
                     {(getCurrentPrice() * Number.parseFloat(quantity || "0")).toFixed(2)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                  ₱{getCurrentPrice().toFixed(2)} × {quantity} units
+                    ₱{getCurrentPrice().toFixed(2)} × {quantity} units
                   </p>
                 </div>
               )}
