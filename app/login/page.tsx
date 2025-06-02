@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { authenticateUser, testDatabaseConnection, fallbackAuthentication } from "@/lib/database"
+import { authenticateUser, testDatabaseConnection } from "@/lib/database"
 
 export default function LoginPage() {
   const [username, setUsername] = useState("")
