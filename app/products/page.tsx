@@ -38,7 +38,7 @@ export default function ProductInventoryPage() {
   const [isProcessingBarcode, setIsProcessingBarcode] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrProduct, setQRProduct] = useState<InventoryItem | null>(null)
-  const { toast } = useToast()
+  const toastApi = useToast()
   const [isUserAdmin, setIsUserAdmin] = useState(false)
 
   const loadInventoryItems = useCallback(async () => {
@@ -48,7 +48,7 @@ export default function ProductInventoryPage() {
       setInventoryItems(data)
     } catch (error) {
       console.error("Error loading inventory items:", error)
-      toast({
+      toastApi.toast({
         title: "Error",
         description: "Failed to load inventory items. Please try again.",
         variant: "destructive",
@@ -56,7 +56,7 @@ export default function ProductInventoryPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [toast])
+  }, [toastApi])
 
   useEffect(() => {
     loadInventoryItems()
@@ -117,7 +117,7 @@ export default function ProductInventoryPage() {
   const handleItemAdded = async (newItem: InventoryItem) => {
     // Reload data from database to ensure consistency
     await loadInventoryItems()
-    toast({
+    toastApi.toast({
       title: "Success",
       description: "Product added and data refreshed.",
     })
@@ -127,7 +127,7 @@ export default function ProductInventoryPage() {
     // Reload data from database to ensure consistency
     await loadInventoryItems()
     setEditingItem(null) // Close the modal
-    toast({
+    toastApi.toast({
       title: "Success",
       description: "Product updated and data refreshed.",
     })
@@ -139,12 +139,12 @@ export default function ProductInventoryPage() {
       if (success) {
         // Reload data from database to ensure consistency
         await loadInventoryItems()
-        toast({
+        toastApi.toast({
           title: "Product deleted",
           description: `${name} has been removed and data refreshed.`,
         })
       } else {
-        toast({
+        toastApi.toast({
           title: "Error",
           description: "Failed to delete product. Please try again.",
           variant: "destructive",
@@ -189,13 +189,17 @@ export default function ProductInventoryPage() {
         if (product) {
           const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
           if (updatedItem) {
-            toast({
+            toastApi.toast({
               title: "Stock Incremented",
               description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
             })
-            await loadInventoryItems()
+            setInventoryItems((prev) =>
+              prev.map((p) =>
+                p.id === product.id ? { ...p, stock: updatedItem.stock } : p
+              )
+            )
           } else {
-            toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
+            toastApi.toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
           }
         } else {
           window.alert("QR code does not match any product.")
@@ -209,13 +213,17 @@ export default function ProductInventoryPage() {
         if (product) {
           const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
           if (updatedItem) {
-            toast({
+            toastApi.toast({
               title: "Stock Incremented",
               description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
             })
-            await loadInventoryItems()
+            setInventoryItems((prev) =>
+              prev.map((p) =>
+                p.id === product.id ? { ...p, stock: updatedItem.stock } : p
+              )
+            )
           } else {
-            toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
+            toastApi.toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
           }
         } else {
           window.alert("Product Not Found. Would you like to add this product?")
