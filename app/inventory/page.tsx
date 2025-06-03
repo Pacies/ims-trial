@@ -300,6 +300,7 @@ export default function RawMaterialInventoryPage() {
                     <TableHead className="pr-8">Quantity</TableHead>
                     <TableHead className="pr-8">Unit</TableHead>
                     <TableHead className="pr-8">Cost/Unit</TableHead>
+                    <TableHead className="pr-8">Supplier</TableHead>
                     <TableHead className="pl-6">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -307,7 +308,7 @@ export default function RawMaterialInventoryPage() {
                 <TableBody>
                   {filteredMaterials.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         {rawMaterials.length === 0
                           ? "No raw materials found. Add your first material to get started."
                           : "No raw materials match your search criteria."}
@@ -327,6 +328,7 @@ export default function RawMaterialInventoryPage() {
                         <TableCell className="pr-8">{item.quantity}</TableCell>
                         <TableCell className="pr-8">{item.unit}</TableCell>
                         <TableCell className="pr-8">₱{item.cost_per_unit.toFixed(2)}</TableCell>
+                        <TableCell className="pr-8">{item.supplier}</TableCell>
                         <TableCell className="pl-6">{getStatusBadge(item.status)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">

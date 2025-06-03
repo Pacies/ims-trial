@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { User } from "@/lib/database"
-import { Package, BarChart3, Users, Home, Wrench } from "lucide-react"
+import { Package, BarChart3, Users, Home, Wrench, ShoppingCart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addActivity } from "@/lib/activity-store"
 
@@ -61,8 +61,15 @@ export default function Navbar() {
     { name: "Dashboard", path: "/dashboard", icon: Home },
     { name: "Raw Materials", path: "/inventory", icon: Wrench },
     { name: "Products", path: "/products", icon: Package },
-    { name: "Reports", path: "/reports", icon: BarChart3 },
   ]
+
+  // Add Orders link only for admin users
+  if (currentUser?.user_type === "admin" || currentUser?.type === "admin") {
+    navItems.push({ name: "Orders", path: "/orders", icon: ShoppingCart })
+  }
+
+  // Add Reports for all users
+  navItems.push({ name: "Reports", path: "/reports", icon: BarChart3 })
 
   // Add manage users link only for admin users
   if (currentUser?.user_type === "admin" || currentUser?.type === "admin") {

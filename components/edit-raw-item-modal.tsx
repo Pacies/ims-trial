@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { updateRawMaterial, type RawMaterial } from "@/lib/database"
+import { updateRawMaterial, type RawMaterial, getSupplierByCategory } from "@/lib/database"
 import { useToast } from "@/hooks/use-toast"
 
 interface EditRawItemModalProps {
@@ -25,6 +25,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
     category: "",
     cost_per_unit: "",
     unit: "",
+    supplier: "",
   })
   const { toast } = useToast()
 
@@ -36,9 +37,18 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
         category: material.category || "",
         cost_per_unit: material.cost_per_unit?.toString() || "0",
         unit: material.unit || "pcs",
+        supplier: material.supplier || getSupplierByCategory(material.category || ""),
       })
     }
   }, [material])
+
+  // Update supplier when category changes
+  useEffect(() => {
+    if (formData.category) {
+      const newSupplier = getSupplierByCategory(formData.category)
+      setFormData((prev) => ({ ...prev, supplier: newSupplier }))
+    }
+  }, [formData.category])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,6 +61,7 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
         category: formData.category,
         cost_per_unit: Number.parseFloat(formData.cost_per_unit),
         unit: formData.unit,
+        supplier: formData.supplier,
       }
 
       const updatedMaterial = await updateRawMaterial(material.id, updatedData)
@@ -158,6 +169,18 @@ export default function EditRawItemModal({ material, onClose, onItemUpdated }: E
                 <SelectItem value="pcs">Pieces</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="supplier">Supplier</Label>
+            <Input
+              id="supplier"
+              value={formData.supplier}
+              readOnly
+              className="bg-gray-50 cursor-not-allowed"
+              placeholder="Supplier (auto-assigned)"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Supplier is automatically assigned based on category</p>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

@@ -68,6 +68,18 @@ export interface Activity {
   created_at: string
 }
 
+// Helper function to get supplier based on category
+export function getSupplierByCategory(category: string): string {
+  switch (category.toLowerCase()) {
+    case "fabric":
+      return "A&B Textile"
+    case "sewing":
+      return "Lucky 8"
+    default:
+      return "A&B Textile" // Default to A&B Textile for unknown categories
+  }
+}
+
 // Helper function to get current user
 export async function getCurrentUser(): Promise<User | null> {
   try {
@@ -458,7 +470,7 @@ export async function getRawMaterials(): Promise<RawMaterial[]> {
         quantity: item.quantity || 0,
         unit: item.unit || (item.category === "Fabric" ? "rolls" : "pcs"),
         cost_per_unit: item.cost_per_unit || 0,
-        supplier: item.supplier,
+        supplier: item.supplier || getSupplierByCategory(item.category || "general"),
         reorder_level: item.reorder_level || 20,
         sku: item.sku || `RAW-${item.id.toString().padStart(4, "0")}`,
         status: item.status || (item.quantity > 20 ? "in-stock" : item.quantity > 0 ? "low-stock" : "out-of-stock"),
@@ -501,11 +513,14 @@ export async function addRawMaterial(
     const unit = material.category === "Fabric" ? "rolls" : "pcs"
     const reorder_level = 20
 
+    // Automatically assign supplier based on category
+    const supplier = getSupplierByCategory(material.category)
+
     let status: "in-stock" | "low-stock" | "out-of-stock" = "in-stock"
     if (material.quantity === 0) status = "out-of-stock"
     else if (material.quantity <= reorder_level) status = "low-stock"
 
-    const newMaterial = { ...material, sku, status, unit, reorder_level }
+    const newMaterial = { ...material, sku, status, unit, reorder_level, supplier }
 
     const { data, error } = await supabase!.from("raw_materials").insert(newMaterial).select().single()
 
@@ -523,6 +538,11 @@ export async function addRawMaterial(
 
 export async function updateRawMaterial(id: number, updates: Partial<RawMaterial>): Promise<RawMaterial | null> {
   try {
+    // If category is being updated, update supplier accordingly
+    if (updates.category) {
+      updates.supplier = getSupplierByCategory(updates.category)
+    }
+
     // Calculate status based on quantity and reorder level
     if (updates.quantity !== undefined || updates.reorder_level !== undefined) {
       const { data: currentMaterial } = await supabase!
