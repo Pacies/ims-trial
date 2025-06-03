@@ -46,6 +46,7 @@ export default function ProductInventoryPage() {
     try {
       const data = await getInventoryItems()
       setInventoryItems(data)
+      return data
     } catch (error) {
       console.error("Error loading inventory items:", error)
       toastApi.toast({
@@ -53,14 +54,18 @@ export default function ProductInventoryPage() {
         description: "Failed to load inventory items. Please try again.",
         variant: "destructive",
       })
+      return []
     } finally {
       setIsLoading(false)
     }
   }, [toastApi])
 
+  // Load inventory items on component mount
   useEffect(() => {
     loadInventoryItems()
-  }, [loadInventoryItems])
+    // We only want this to run once on mount, so we don't include loadInventoryItems in the dependency array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -180,57 +185,50 @@ export default function ProductInventoryPage() {
       try {
         parsed = JSON.parse(barcode)
       } catch (e) {}
-      if (parsed && parsed.type === "item_update" && parsed.itemId) {
-        const product = inventoryItems.find(
+      
+      let product: InventoryItem | undefined
+      
+      if (parsed?.type === "item_update" && parsed.itemId) {
+        product = inventoryItems.find(
           (item) =>
             item.id.toString() === parsed.itemId.toString() ||
             item.sku.toString() === parsed.itemId.toString()
         )
-        if (product) {
-          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
-          if (updatedItem) {
-            toastApi.toast({
-              title: "Stock Incremented",
-              description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
-            })
-            setInventoryItems((prev) =>
-              prev.map((p) =>
-                p.id === product.id ? { ...p, stock: updatedItem.stock } : p
-              )
-            )
-          } else {
-            toastApi.toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
-          }
-        } else {
-          window.alert("QR code does not match any product.")
-        }
       } else {
-        const product = inventoryItems.find(
+        product = inventoryItems.find(
           (item) =>
             item.sku.toString() === barcode.toString() ||
             item.id.toString() === barcode.toString()
         )
-        if (product) {
-          const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
-          if (updatedItem) {
-            toastApi.toast({
-              title: "Stock Incremented",
-              description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
-            })
-            setInventoryItems((prev) =>
-              prev.map((p) =>
-                p.id === product.id ? { ...p, stock: updatedItem.stock } : p
-              )
-            )
-          } else {
-            toastApi.toast({ title: "Error", description: "Failed to update product stock.", variant: "destructive" })
-          }
-        } else {
-          window.alert("Product Not Found. Would you like to add this product?")
-        }
       }
+      
+      if (product) {
+        const updatedItem = await updateInventoryItem(product.id, { stock: product.stock + 1 })
+        if (updatedItem) {
+          toastApi.toast({
+            title: "Stock Incremented",
+            description: `Stock for ${product.name} incremented to ${updatedItem.stock}`,
+          })
+          // Update the specific item in the state instead of reloading everything
+          setInventoryItems(prev => 
+            prev.map(item => 
+              item.id === product!.id ? { ...item, stock: updatedItem.stock } : item
+            )
+          )
+        } else {
+          toastApi.toast({ 
+            title: "Error", 
+            description: "Failed to update product stock.", 
+            variant: "destructive" 
+          })
+        }
+      } else {
+        window.alert(parsed ? "QR code does not match any product." : "Product Not Found. Would you like to add this product?")
+      }
+      
       setShowBarcodeScanner(false)
     } catch (error) {
+      console.error("Error processing barcode scan:", error)
       window.alert("Error: Failed to process barcode scan")
     } finally {
       setIsProcessingBarcode(false)
