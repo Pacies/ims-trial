@@ -554,7 +554,7 @@ export async function generatePDFContent(report: Report): Promise<Blob> {
       yPosition += 8
 
       const rawHeaders = ["SKU", "Name", "Category", "Quantity", "Unit", "Cost/Unit", "Value", "Status"]
-      const rawWidths = [15, 25, 15, 15, 10, 20, 20, 20]
+      const rawWidths = [18, 32, 20, 15, 12, 22, 23, 18]
       const rawTableWidth = rawWidths.reduce((sum, width) => sum + width, 0)
       const rawTableStartY = yPosition + 4 // Add more space before the table starts
 
@@ -599,7 +599,7 @@ export async function generatePDFContent(report: Report): Promise<Blob> {
         xPosition += rawWidths[0]
 
         // Name column - left aligned with padding
-        doc.text(item.name.substring(0, 12), xPosition + 2, currentY - rowHeight / 2 + 2)
+        doc.text(item.name.substring(0, 24), xPosition + 2, currentY - rowHeight / 2 + 2)
         xPosition += rawWidths[1]
 
         // Category column - centered
@@ -841,7 +841,7 @@ export async function generatePDFContent(report: Report): Promise<Blob> {
           xPosition += rawWidths[0]
 
           // Name column - left aligned with padding
-          doc.text(item.name.substring(0, 12), xPosition + 2, currentY - rowHeight / 2 + 2)
+          doc.text(item.name.substring(0, 24), xPosition + 2, currentY - rowHeight / 2 + 2)
           xPosition += rawWidths[1]
 
           // Category column - centered

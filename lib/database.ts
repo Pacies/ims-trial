@@ -587,13 +587,18 @@ export async function getUsers(): Promise<User[]> {
 
 export async function addUser(
   userData: Omit<User, "id" | "created_at" | "updated_at" | "last_login">,
-): Promise<User | null> {
+): Promise<{ user: User | null; error: any }> {
   const { data, error } = await supabase!.from("users").insert([userData]).select()
-  if (error) {
-    console.error("Error adding user:", error)
-    return null
+  // If error is a real error (has code/message/details), or is an empty object (Supabase bug for unique violation)
+  if (error && (error.code || error.message || error.details || Object.keys(error).length === 0)) {
+    // If error is empty object, treat as duplicate
+    if (Object.keys(error).length === 0) {
+      console.error("Error adding user: unknown/empty error object (possible duplicate)")
+      return { user: null, error: { message: "Unknown error (possible duplicate)", code: "23505" } }
+    }
+    return { user: null, error }
   }
-  return data[0] as User
+  return { user: data?.[0] as User, error: null }
 }
 
 export async function addUserPassword(userId: string, password: string): Promise<boolean> {

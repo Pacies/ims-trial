@@ -139,7 +139,26 @@ export default function ManageUsersPage() {
           status: formData.status,
         }
 
-        result = await addUser(newUserPayload as Omit<User, "id" | "created_at" | "updated_at" | "last_login">)
+        const { user: addedUser, error: addUserError } = await addUser(newUserPayload as Omit<User, "id" | "created_at" | "updated_at" | "last_login">)
+        result = addedUser
+
+        if (addUserError) {
+          // Supabase sometimes returns an empty object for unique constraint errors
+          const isDuplicate =
+            addUserError.code === "23505" ||
+            (addUserError.message && addUserError.message.toLowerCase().includes("duplicate")) ||
+            (addUserError.details && addUserError.details.toLowerCase().includes("already exists")) ||
+            (Object.keys(addUserError).length === 0); // If error is an empty object
+
+          if (isDuplicate) {
+            toast({ title: "Duplicate User", description: "A user with this username or email already exists.", variant: "destructive" });
+            window.alert("You are not able to create duplicate username or email.");
+          } else {
+            toast({ title: "Error", description: "Failed to add user.", variant: "destructive" });
+          }
+          setIsLoading(false);
+          return; // Stop further execution if error
+        }
 
         if (result) {
           // Add password for the new user
