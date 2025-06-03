@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Edit, Trash2, RefreshCw } from "lucide-react"
+import { Search, Edit, Trash2, RefreshCw, Factory } from "lucide-react"
 import { getRawMaterials, deleteRawMaterial, updateRawMaterial, type RawMaterial, isAdmin } from "@/lib/database"
 import { useToast } from "@/hooks/use-toast"
 import AddRawItemModal from "@/components/add-raw-item-modal"
@@ -17,6 +17,7 @@ import MainLayout from "@/components/main-layout"
 import dynamic from "next/dynamic"
 import ItemQRCode from "@/components/ui/item-qr-code"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import GenerateProductOrderModal from "@/components/generate-product-order-modal"
 
 const BarcodeScanner = dynamic(() => import("react-qr-barcode-scanner"), { ssr: false })
 
@@ -32,6 +33,7 @@ export default function RawMaterialInventoryPage() {
   const [isProcessingBarcode, setIsProcessingBarcode] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrMaterial, setQRMaterial] = useState<RawMaterial | null>(null)
+  const [showProductOrderModal, setShowProductOrderModal] = useState(false)
   const { toast } = useToast()
   const [isUserAdmin, setIsUserAdmin] = useState(false)
 
@@ -207,6 +209,23 @@ export default function RawMaterialInventoryPage() {
     }
   }
 
+  const handleProductOrderCreated = () => {
+    toast({
+      title: "Product Order Created",
+      description: "The product order has been created successfully.",
+    })
+    // In a real app, we might want to refresh raw materials here
+    loadRawMaterials()
+  }
+
+  // Helper function to safely format currency
+  const formatCurrency = (value: number | undefined | null): string => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "₱0.00"
+    }
+    return `₱${Number(value).toFixed(2)}`
+  }
+
   if (isLoading && rawMaterials.length === 0) {
     return (
       <MainLayout>
@@ -235,6 +254,14 @@ export default function RawMaterialInventoryPage() {
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="icon" onClick={loadRawMaterials} disabled={isLoading}>
                   <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                </Button>
+                <Button
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => setShowProductOrderModal(true)}
+                >
+                  <Factory className="h-4 w-4 mr-2" />
+                  Generate Product Order
                 </Button>
                 <AddRawItemModal onItemAdded={handleItemAdded} onItemUpdated={handleItemUpdated} />
               </div>
@@ -317,18 +344,18 @@ export default function RawMaterialInventoryPage() {
                   ) : (
                     filteredMaterials.map((item, index) => (
                       <TableRow key={`${item.id}-${index}`}>
-                        <TableCell className="font-mono text-sm">{item.sku}</TableCell>
+                        <TableCell className="font-mono text-sm">{item.sku || "N/A"}</TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">{item.name}</p>
                             {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
                           </div>
                         </TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell className="pr-8">{item.quantity}</TableCell>
-                        <TableCell className="pr-8">{item.unit}</TableCell>
-                        <TableCell className="pr-8">₱{item.cost_per_unit.toFixed(2)}</TableCell>
-                        <TableCell className="pr-8">{item.supplier}</TableCell>
+                        <TableCell>{item.category || "N/A"}</TableCell>
+                        <TableCell className="pr-8">{item.quantity || 0}</TableCell>
+                        <TableCell className="pr-8">{item.unit || "N/A"}</TableCell>
+                        <TableCell className="pr-8">{formatCurrency(item.cost_per_unit)}</TableCell>
+                        <TableCell className="pr-8">{item.supplier || "N/A"}</TableCell>
                         <TableCell className="pl-6">{getStatusBadge(item.status)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -371,8 +398,14 @@ export default function RawMaterialInventoryPage() {
                 Showing {filteredMaterials.length} of {rawMaterials.length} raw materials
               </p>
               <p>
-                Total value: ₱
-                {rawMaterials.reduce((sum, item) => sum + item.cost_per_unit * item.quantity, 0).toLocaleString()}
+                Total value:{" "}
+                {formatCurrency(
+                  rawMaterials.reduce((sum, item) => {
+                    const cost = item.cost_per_unit || 0
+                    const quantity = item.quantity || 0
+                    return sum + cost * quantity
+                  }, 0),
+                )}
               </p>
             </div>
           </CardContent>
@@ -431,6 +464,13 @@ export default function RawMaterialInventoryPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Generate Product Order Modal */}
+        <GenerateProductOrderModal
+          isOpen={showProductOrderModal}
+          onClose={() => setShowProductOrderModal(false)}
+          onOrderCreated={handleProductOrderCreated}
+        />
       </div>
     </MainLayout>
   )
